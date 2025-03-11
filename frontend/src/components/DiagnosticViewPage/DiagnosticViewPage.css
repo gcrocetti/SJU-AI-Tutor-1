@@ -1,0 +1,108 @@
+/* src/components/DiagnosticsViewPage/DiagnosticsViewPage.css */
+.diagnostics-page {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+  
+  .navigation-button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 40px;
+    height: 40px;
+    background-color: white;
+    border-radius: 50%;
+    border: none;
+    position: fixed; /* Changed from absolute to fixed */
+    top: 80px; /* Positioned below the header */
+    cursor: pointer;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+    color: #cf102d;
+    z-index: 1000; /* Ensure it's above other content */
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  .navigation-button:hover {
+    background-color: #cf102d;
+    color: white;
+  }
+  
+  .navigation-button.left {
+    left: 20px;
+  }
+  
+  /* Loading indicator */
+  .loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    font-size: 1.2rem;
+    color: #666;
+  }
+  
+  /* Additional styles for priority indicators */
+  .priority-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+  }
+  
+  .priority-dot.high {
+    background-color: #cf102d;
+  }
+  
+  .priority-dot.medium {
+    background-color: #e3ba12;
+  }
+  
+  .priority-dot.low {
+    background-color: #2a5d86;
+  }
+  
+  /* Feedback styling */
+  .answer-feedback {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 5px;
+  }
+  
+  .answer-feedback.correct {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+  
+  .answer-feedback.incorrect {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+  
+  /* Correct/incorrect answers */
+  .correct-answer {
+    background-color: #d4edda !important;
+    border-left: 3px solid #28a745;
+  }
+  
+  .incorrect-answer {
+    background-color: #f8d7da !important;
+    border-left: 3px solid #dc3545;
+  }
+  
+  /* Resource items */
+  .resource-item {
+    margin-bottom: 10px;
+  }
+  
+  .resource-item a {
+    color: #cf102d;
+    text-decoration: none;
+  }
+  
+  .resource-item a:hover {
+    text-decoration: underline;
+  }
