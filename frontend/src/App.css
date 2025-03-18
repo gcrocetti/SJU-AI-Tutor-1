@@ -1,0 +1,57 @@
+/* Importing Web Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Georgia:wght@400;700&family=Open+Sans:wght@400;700&family=Sacramento&family=Source+Serif+Pro:wght@400;700&family=Verdana:wght@400;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background: #ffffff;
+  font-family: 'Georgia', serif;
+  overflow-x: hidden;
+}
+
+#root {
+  max-width: 100%;
+  height: 100vh;
+  margin: 0 auto;
+  text-align: center;
+  font-family: 'Georgia', serif;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* src/App.css */
+.app-container {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  background-color: #cf102d;
+  color: #ffffff;
+  padding: 20px 0;
+  text-align: center;
+  font-size: 30px;
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.content-container {
+  margin-top: 64px; /* Match header height */
+  height: calc(100vh - 64px);
+  width: 100%;
+  position: relative;
+}
