@@ -15,6 +15,7 @@ The agent follows these steps:
 import os
 import json
 import logging
+import uuid
 from typing import Dict, List, Optional, Any, Tuple, Callable
 
 # LangGraph and LangChain imports
@@ -180,15 +181,21 @@ def response_generator(state: AgentState) -> Dict:
 User query: {state["query"]}
 
 Please provide a helpful response. If you used any of the sources above, 
-please cite them as [Source 1], [Source 2], etc. If you don't know the answer 
-or need more specific information, please say so.
+please include the source URLs directly in your response in the following format:
+"[Source: https://example.com]" rather than just [Source 1].
+
+When including multiple sources, name each one separately with its URL:
+"According to [Source: https://example1.com] and [Source: https://example2.com], ..."
+
+If you don't know the answer or need more specific information, please say so.
 """)
     ])
     
     try:
         # Convert message format for prompt
         history = []
-        for msg in state["messages"][:-1]:  # Exclude the current query
+        # Get the last 10 messages (excluding the current query) for context
+        for msg in state["messages"][-11:-1]:  # Increased context window from 5 to 10 messages
             if msg["role"] == "user":
                 history.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
@@ -247,10 +254,7 @@ def create_agent_graph() -> StateGraph:
     workflow.add_node("information_retriever", information_retriever)
     workflow.add_node("response_generator", response_generator)
     
-    # Add edges to the graph - FIX HERE
-    # Change this line:
-    # workflow.add_edge("query_analyzer", router)
-    # To this:
+    # Add conditional edges from query_analyzer
     workflow.add_conditional_edges(
         "query_analyzer",
         router,
@@ -259,6 +263,8 @@ def create_agent_graph() -> StateGraph:
             "response_generator": "response_generator"
         }
     )
+    
+    # Add remaining edges
     workflow.add_edge("information_retriever", "response_generator")
     workflow.add_edge("response_generator", END)
     
@@ -307,13 +313,17 @@ def process_query(query: str, session_id: str, message_history: Optional[List[Di
         # Get the final response
         response = final_state["final_response"]
         
+        # Extract search results for frontend reference
+        search_results = final_state.get("search_results", [])
+        
         # Add the response to message history
         message_history.append({"role": "assistant", "content": response})
         
-        # Return result
+        # Return result with enriched data for frontend
         return {
             "response": response,
             "message_history": message_history,
+            "sources": search_results,  # Include full source details for frontend formatting
             "error": final_state.get("error")
         }
         
@@ -327,6 +337,7 @@ def process_query(query: str, session_id: str, message_history: Optional[List[Di
         return {
             "response": error_message,
             "message_history": message_history,
+            "sources": [],
             "error": str(e)
         }
 
@@ -354,25 +365,33 @@ def lambda_handler(event, context):
         session_id = body.get('session_id', '')
         message_history = body.get('message_history', [])
         
+        # Generate a session ID if not provided
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            logger.info(f"Generated new session ID: {session_id}")
+        
         # Validate required parameters
         if not query:
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'Query is required'})
             }
-            
-        if not session_id:
-            return {
-                'statusCode': 400,
-                'body': json.dumps({'error': 'Session ID is required'})
-            }
         
         # Process the query
         result = process_query(query, session_id, message_history)
         
+        # Add session ID to response
+        result['session_id'] = session_id
+        
         # Return response
         return {
             'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+            },
             'body': json.dumps(result)
         }
         
@@ -380,6 +399,12 @@ def lambda_handler(event, context):
         logger.error(f"Lambda handler error: {e}")
         return {
             'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+            },
             'body': json.dumps({'error': f'Internal server error: {str(e)}'})
         }
 
@@ -397,4 +422,5 @@ if __name__ == "__main__":
     
     result = process_query(test_query, test_session_id)
     print(f"Query: {test_query}")
-    print(f"Response: {result['response']}")
+    print("\nFull response object:")
+    print(json.dumps(result, indent=2))
