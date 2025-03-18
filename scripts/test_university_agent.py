@@ -4,6 +4,8 @@ Test script for the university agent.
 
 This script allows testing the university agent locally before deployment.
 It simulates a conversation by accepting user input and displaying agent responses.
+
+Updated for LangChain 0.3+ compatibility.
 """
 
 import os
@@ -77,6 +79,13 @@ def main():
             # Display any error (for debugging)
             if result.get("error"):
                 print(f"\n[Debug] Error: {result['error']}")
+                
+            # Optionally display full sources for debugging
+            # Uncomment the following lines to see the complete source information
+            # if result.get("sources"):
+            #     print("\nSources:")
+            #     for i, source in enumerate(result["sources"], 1):
+            #         print(f"  {i}. {source['title']} - {source['link']}")
                 
         except Exception as e:
             print(f"\nError: {str(e)}")

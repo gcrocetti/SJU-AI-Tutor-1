@@ -10,21 +10,23 @@ The agent follows these steps:
 2. Retrieve relevant information from Google Custom Search if needed
 3. Generate a coherent, helpful response using the conversation history and retrieved information
 4. Maintain conversation context across interactions
+
+Refactored for LangChain 0.3+ and LangGraph 0.1+
 """
 
 import os
 import json
 import logging
 import uuid
-from typing import Dict, List, Optional, Any, Tuple, Callable
+from typing import Dict, List, Optional, Any, Tuple, TypedDict, Annotated
 
-# LangGraph and LangChain imports
+# LangGraph and LangChain imports - updated for 0.3+
 from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 # Import shared utilities
 from agents.common.utils import setup_logging, safe_json_loads
@@ -34,6 +36,18 @@ from agents.university_agent.tools import google_search_query
 # Configure logging
 logger = logging.getLogger(__name__)
 setup_logging()
+
+# Define typed state for LangGraph
+class AgentState(TypedDict):
+    """State maintained throughout the agent's execution."""
+    messages: List[Dict[str, Any]]
+    session_id: str
+    query: str
+    needs_search: bool
+    search_results: List[Dict[str, str]]
+    final_response: Optional[str]
+    error: Optional[str]
+
 
 # Initialize the LLM
 def get_llm(temperature: float = 0.7) -> ChatOpenAI:
@@ -57,19 +71,7 @@ def get_llm(temperature: float = 0.7) -> ChatOpenAI:
         raise
 
 
-# Type for the graph state
-class AgentState(dict):
-    """State maintained throughout the agent's execution."""
-    messages: List[Dict[str, Any]]
-    session_id: str
-    query: str
-    needs_search: bool = False
-    search_results: List[Dict[str, str]] = []
-    final_response: Optional[str] = None
-    error: Optional[str] = None
-
-
-def query_analyzer(state: AgentState) -> Dict:
+def query_analyzer(state: AgentState) -> AgentState:
     """
     Analyze the user query to determine if external information retrieval is needed.
     
@@ -102,7 +104,7 @@ Do I need to search for external information to properly answer this query?
     ])
     
     try:
-        # Get analysis result
+        # Get analysis result using LangChain 0.3+ chain syntax
         chain = analysis_prompt | llm | StrOutputParser()
         result = chain.invoke({})
         
@@ -110,18 +112,20 @@ Do I need to search for external information to properly answer this query?
         needs_search = "YES" in result.upper() and not "NO" in result.upper()
         
         # Update state
-        state["needs_search"] = needs_search
+        new_state = state.copy()
+        new_state["needs_search"] = needs_search
         logger.info(f"Query analysis decided: needs_search={needs_search}")
         
-        return state
+        return new_state
     except Exception as e:
         logger.error(f"Error in query analysis: {e}")
-        state["error"] = f"Failed to analyze query: {str(e)}"
-        state["needs_search"] = True  # Default to search if analysis fails
-        return state
+        new_state = state.copy()
+        new_state["error"] = f"Failed to analyze query: {str(e)}"
+        new_state["needs_search"] = True  # Default to search if analysis fails
+        return new_state
 
 
-def information_retriever(state: AgentState) -> Dict:
+def information_retriever(state: AgentState) -> AgentState:
     """
     Retrieve relevant information for the query using Google Custom Search.
     
@@ -139,18 +143,20 @@ def information_retriever(state: AgentState) -> Dict:
         search_results = google_search_query(query)
         
         # Add results to state
-        state["search_results"] = search_results
+        new_state = state.copy()
+        new_state["search_results"] = search_results
         logger.info(f"Retrieved {len(search_results)} search results")
         
-        return state
+        return new_state
     except Exception as e:
         logger.error(f"Error retrieving information: {e}")
-        state["error"] = f"Failed to retrieve information: {str(e)}"
-        state["search_results"] = []  # Empty results on error
-        return state
+        new_state = state.copy()
+        new_state["error"] = f"Failed to retrieve information: {str(e)}"
+        new_state["search_results"] = []  # Empty results on error
+        return new_state
 
 
-def response_generator(state: AgentState) -> Dict:
+def response_generator(state: AgentState) -> AgentState:
     """
     Generate a response based on the conversation history and retrieved information.
     
@@ -201,20 +207,22 @@ If you don't know the answer or need more specific information, please say so.
             elif msg["role"] == "assistant":
                 history.append(AIMessage(content=msg["content"]))
         
-        # Generate response
+        # Generate response using LangChain 0.3+ chain syntax
         chain = response_prompt | llm | StrOutputParser()
         response = chain.invoke({"history": history})
         
         # Update state
-        state["final_response"] = response
+        new_state = state.copy()
+        new_state["final_response"] = response
         logger.info(f"Generated response: {response[:50]}...")
         
-        return state
+        return new_state
     except Exception as e:
         logger.error(f"Error generating response: {e}")
-        state["error"] = f"Failed to generate response: {str(e)}"
-        state["final_response"] = "I'm sorry, but I encountered an error while trying to answer your question. Please try again later."
-        return state
+        new_state = state.copy()
+        new_state["error"] = f"Failed to generate response: {str(e)}"
+        new_state["final_response"] = "I'm sorry, but I encountered an error while trying to answer your question. Please try again later."
+        return new_state
 
 
 def router(state: AgentState) -> str:
@@ -246,7 +254,7 @@ def create_agent_graph() -> StateGraph:
     Returns:
         Configured StateGraph for the agent
     """
-    # Create a new graph
+    # Create a new graph with TypedDict state
     workflow = StateGraph(AgentState)
     
     # Add nodes to the graph
@@ -295,15 +303,15 @@ def process_query(query: str, session_id: str, message_history: Optional[List[Di
     message_history.append({"role": "user", "content": query})
     
     # Initialize agent state
-    initial_state = AgentState(
-        messages=message_history,
-        session_id=session_id,
-        query=query,
-        needs_search=False,
-        search_results=[],
-        final_response=None,
-        error=None
-    )
+    initial_state: AgentState = {
+        "messages": message_history,
+        "session_id": session_id,
+        "query": query,
+        "needs_search": False,
+        "search_results": [],
+        "final_response": None,
+        "error": None
+    }
     
     try:
         # Create and run the agent graph
@@ -422,5 +430,4 @@ if __name__ == "__main__":
     
     result = process_query(test_query, test_session_id)
     print(f"Query: {test_query}")
-    print("\nFull response object:")
-    print(json.dumps(result, indent=2))
+    print(f"Response: {result['response']}")
