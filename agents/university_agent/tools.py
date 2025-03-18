@@ -4,6 +4,8 @@ Tools for the University Information Agent.
 This module implements various tools used by the agent, primarily for:
 1. Retrieving information from Google Custom Search
 2. Processing and formatting search results
+
+Updated for LangChain 0.3+ compatibility
 """
 
 import os
@@ -45,7 +47,6 @@ def google_search_query(query: str, num_results: int = 5) -> List[Dict[str, str]
         'num': num_results
     }
     
-    # Add additional search parameters to focus on university content
     # Create the URL
     url = f"https://www.googleapis.com/customsearch/v1?{urlencode(params)}"
     
