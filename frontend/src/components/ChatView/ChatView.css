@@ -47,6 +47,7 @@
   font-size: 16px;
   word-wrap: break-word;
   animation: fadeIn 0.3s ease-out forwards;
+  text-align: left; /* Added this line to ensure text is left-aligned */
 }
 
 @keyframes fadeIn {
@@ -70,6 +71,24 @@
   color: #ffffff;
   border-top-right-radius: 0;
   margin-left: auto;
+}
+
+/* Source Links Styling */
+.source-link {
+  color: #0066cc;
+  text-decoration: underline;
+  font-weight: 500;
+  display: inline-block;
+  margin: 0 2px;
+}
+
+.bot-message .source-link {
+  color: #0066cc;
+}
+
+.user-message .source-link {
+  color: #ffffff;
+  text-decoration-color: rgba(255, 255, 255, 0.7);
 }
 
 /* Typing Indicator */
