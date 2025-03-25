@@ -1,19 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import './ChatView.css';
-
-/* Imports for backend implementation */
-//import chatService from '../../services/chatService'; // Handles API communication with backend, needed to replace placeholder logic we're using now
-//import { Message } from '../../types'; // Handles proper typing for messages 
-//import { ChatViewProps } from './types'; // Handles props for this component, needed when passing initial messages, session IDs, callback functions, etc
+import chatService from '../../services/chatService';
 
 /**
  * ChatView Component
  * 
  * A React component that provides a chat interface for students to interact with the Ciro AI tutor.
- * Currently implements a simple placeholder response system, but designed to be connected to a
- * backend service that will process messages through an LLM (likely OpenAI) and retrieve context
- * from a vector database (Pinecone).
+ * Connects to a Flask API that processes messages through the agent system.
  * 
  * @component
  * @example
@@ -26,7 +20,7 @@ const ChatView: React.FC = () => {
   const [messages, setMessages] = useState<Array<{ id: string; text: string; sender: 'user' | 'bot' }>>([
     {
       id: '1',
-      text: "Hello! I'm Ciro, your AI tutor for LST1000. How can I help you today?",
+      text: "Hey there! I'm CIRO, your AI Tutor. I'm here to provide you with academic and personal support. How may I help you today?",
       sender: "bot"
     }
   ]);
@@ -36,6 +30,9 @@ const ChatView: React.FC = () => {
   
   // State to control the display of the typing indicator
   const [isTyping, setIsTyping] = useState<boolean>(false);
+  
+  // State to store the current session ID
+  const [sessionId, setSessionId] = useState<string>('');
   
   // Reference to the bottom of the message list for auto-scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -58,14 +55,73 @@ const ChatView: React.FC = () => {
   };
   
   /**
-   * Handles message submission when the user sends a message
+   * Formats a message text to properly display hyperlinks to sources
    * 
-   * Currently implements a placeholder response system.
-   * TODO: Replace with actual backend service integration
-   * - Will need to call chatService.sendMessage()
-   * - Will need to track session ID
-   * - Will need to handle API errors
-   * - Will need to process bot responses, potentially including citations and "thinking" steps
+   * Converts patterns like [Source: https://example.com] to hyperlinks
+   * 
+   * @param text - The message text to format
+   * @returns - Formatted message with hyperlinked sources
+   */
+  const formatMessageWithLinks = (text: string): ReactNode[] => {
+    if (!text) return [];
+    
+    // Regular expression to find source links
+    // Matches [Source: https://...] or similar patterns
+    const sourcePattern = /\[(Source|Source \d+):\s*(https?:\/\/[^\s\]]+)\]/g;
+    
+    // Split the text by source links
+    const parts = text.split(sourcePattern);
+    
+    // If no source links found, return the original text
+    if (parts.length === 1) return [text];
+    
+    // Initialize result array
+    const result: ReactNode[] = [];
+    let key = 0;
+    
+    // Process each part
+    for (let i = 0; i < parts.length; i++) {
+      // Add regular text part
+      if (parts[i] && !parts[i].startsWith('http')) {
+        result.push(<span key={key++}>{parts[i]}</span>);
+      }
+      
+      // If we have a source label and URL, create a link
+      if (i + 1 < parts.length && parts[i + 1]?.startsWith('http')) {
+        const sourceLabel = parts[i] || 'Source';
+        const sourceUrl = parts[i + 1];
+        
+        // Extract domain for displaying a cleaner link text
+        let displayUrl = sourceUrl;
+        try {
+          const url = new URL(sourceUrl);
+          displayUrl = url.hostname.replace('www.', '');
+        } catch (e) {
+          // Use the full URL if parsing fails
+        }
+        
+        result.push(
+          <a 
+            key={key++}
+            href={sourceUrl}
+            className="source-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {`[${sourceLabel}: ${displayUrl}]`}
+          </a>
+        );
+        
+        // Skip the URL part as we've already used it
+        i++;
+      }
+    }
+    
+    return result;
+  };
+  
+  /**
+   * Handles message submission when the user sends a message
    * 
    * @param e - The form submission event
    */
@@ -83,44 +139,36 @@ const ChatView: React.FC = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     
-    // Show typing indicator to simulate the bot thinking
+    // Show typing indicator
     setIsTyping(true);
     
-    // PLACEHOLDER: Replace with actual API call
-    // TODO: Implement API integration with backend
-    setTimeout(() => {
-      const botResponse = {
-        id: uuidv4(),
-        text: "Hmmm, let me think about that...",
-        sender: 'bot' as const
-      };
+    try {
+      // Send message to the backend and await response
+      const botResponse = await chatService.sendMessage(inputValue, sessionId);
       
-      setMessages(prev => [...prev, botResponse]);
+      // If this is the first message, store the session ID
+      if (!sessionId && botResponse.metadata?.sessionId) {
+        setSessionId(botResponse.metadata.sessionId);
+      }
+      
+      // Add the response to the chat
+      setMessages(prev => [...prev, {
+        id: botResponse.id,
+        text: botResponse.text,
+        sender: 'bot'
+      }]);
+    } catch (error) {
+      console.error('Failed to get response:', error);
+      
+      // Show error message
+      setMessages(prev => [...prev, {
+        id: uuidv4(),
+        text: "Sorry, I encountered an error. Please try again.",
+        sender: 'bot'
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 2000); // Simulated 2-second delay
-    
-    /**
-     * FUTURE IMPLEMENTATION:
-     * 
-     * try {
-     *   // Send to backend and await response
-     *   const sessionId = "current-session-id"; // Will need state for this
-     *   const response = await chatService.sendMessage(inputValue, sessionId);
-     *   
-     *   // Process and add the bot's response
-     *   setMessages(prev => [...prev, response]);
-     * } catch (error) {
-     *   // Handle errors and show appropriate message to user
-     *   console.error('Failed to get response:', error);
-     *   setMessages(prev => [...prev, {
-     *     id: uuidv4(),
-     *     text: "Sorry, I encountered an error. Please try again.",
-     *     sender: 'bot'
-     *   }]);
-     * } finally {
-     *   setIsTyping(false);
-     * }
-     */
+    }
   };
 
   return (
@@ -132,7 +180,7 @@ const ChatView: React.FC = () => {
             key={message.id} 
             className={`message ${message.sender === 'bot' ? 'bot-message' : 'user-message'}`}
           >
-            {message.text}
+            {formatMessageWithLinks(message.text)}
           </div>
         ))}
         
@@ -157,11 +205,12 @@ const ChatView: React.FC = () => {
           onChange={handleInputChange}
           placeholder="Ask Ciro anything about LST1000..."
           className="input-field"
+          disabled={isTyping}
         />
         <button 
           type="submit" 
           className="send-button"
-          disabled={!inputValue.trim()}
+          disabled={!inputValue.trim() || isTyping}
           aria-label="Send message"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
