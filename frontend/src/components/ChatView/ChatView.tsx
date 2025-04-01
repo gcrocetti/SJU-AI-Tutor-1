@@ -10,10 +10,6 @@ import chatService from '../../services/chatService';
  * Connects to a Flask API that processes messages through the agent system.
  * 
  * @component
- * @example
- * return (
- *   <ChatView />
- * )
  */
 const ChatView: React.FC = () => {
   // State to store all messages in the conversation
@@ -55,69 +51,120 @@ const ChatView: React.FC = () => {
   };
   
   /**
-   * Formats a message text to properly display hyperlinks to sources
+   * Formats source links in text
    * 
-   * Converts patterns like [Source: https://example.com] to hyperlinks
-   * 
-   * @param text - The message text to format
-   * @returns - Formatted message with hyperlinked sources
+   * @param text - The text containing source links to format
+   * @returns Formatted source links
    */
-  const formatMessageWithLinks = (text: string): ReactNode[] => {
-    if (!text) return [];
-    
+  const formatSourceLinks = (text: string): ReactNode[] => {
     // Regular expression to find source links
     // Matches [Source: https://...] or similar patterns
     const sourcePattern = /\[(Source|Source \d+):\s*(https?:\/\/[^\s\]]+)\]/g;
     
-    // Split the text by source links
-    const parts = text.split(sourcePattern);
-    
-    // If no source links found, return the original text
-    if (parts.length === 1) return [text];
-    
-    // Initialize result array
-    const result: ReactNode[] = [];
-    let key = 0;
-    
-    // Process each part
-    for (let i = 0; i < parts.length; i++) {
-      // Add regular text part
-      if (parts[i] && !parts[i].startsWith('http')) {
-        result.push(<span key={key++}>{parts[i]}</span>);
-      }
-      
-      // If we have a source label and URL, create a link
-      if (i + 1 < parts.length && parts[i + 1]?.startsWith('http')) {
-        const sourceLabel = parts[i] || 'Source';
-        const sourceUrl = parts[i + 1];
-        
-        // Extract domain for displaying a cleaner link text
-        let displayUrl = sourceUrl;
-        try {
-          const url = new URL(sourceUrl);
-          displayUrl = url.hostname.replace('www.', '');
-        } catch (e) {
-          // Use the full URL if parsing fails
-        }
-        
-        result.push(
-          <a 
-            key={key++}
-            href={sourceUrl}
-            className="source-link"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {`[${sourceLabel}: ${displayUrl}]`}
-          </a>
-        );
-        
-        // Skip the URL part as we've already used it
-        i++;
-      }
+    if (!sourcePattern.test(text)) {
+      return [text];
     }
     
-    return result;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    const regex = new RegExp(sourcePattern);
+    
+    // Reset regex
+    regex.lastIndex = 0;
+    
+    // Find all matches
+    while ((match = regex.exec(text)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+      
+      const sourceLabel = match[1];
+      const sourceUrl = match[2];
+      
+      // Extract domain for displaying a cleaner link text
+      let displayUrl = sourceUrl;
+      try {
+        const url = new URL(sourceUrl);
+        displayUrl = url.hostname.replace('www.', '');
+      } catch (e) {
+        // Use the full URL if parsing fails
+      }
+      
+      // Add the formatted link
+      parts.push(
+        <a 
+          key={`source-${match.index}`}
+          href={sourceUrl}
+          className="source-link"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {`[${sourceLabel}: ${displayUrl}]`}
+        </a>
+      );
+      
+      lastIndex = regex.lastIndex;
+    }
+    
+    // Add any remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+    
+    return parts;
+  };
+  
+  /**
+   * Format message text with paragraphs, lists, and links
+   * 
+   * @param text - The message text to format
+   * @returns Formatted message content
+   */
+  const formatMessageContent = (text: string): ReactNode => {
+    if (!text) return null;
+    
+    // Split the text into paragraphs
+    const paragraphs = text.split('\n\n');
+    
+    return (
+      <>
+        {paragraphs.map((paragraph, index) => {
+          // Check if paragraph is a numbered list item
+          const isNumberedListItem = /^\d+\.\s/.test(paragraph);
+          
+          // Check if paragraph is a bulleted list item
+          const isBulletedListItem = /^[-*•]\s/.test(paragraph);
+          
+          if (paragraph.trim() === '') {
+            return <br key={`br-${index}`} />;
+          } else if (isNumberedListItem) {
+            // For a cleaner display, we'll create proper lists later
+            // For now, just display as paragraph
+            return (
+              <p key={`p-${index}`}>
+                {formatSourceLinks(paragraph)}
+              </p>
+            );
+          } else if (isBulletedListItem) {
+            // For a cleaner display, we'll create proper lists later
+            // For now, just display as paragraph
+            return (
+              <p key={`p-${index}`}>
+                {formatSourceLinks(paragraph)}
+              </p>
+            );
+          } else {
+            return (
+              <p key={`p-${index}`}>
+                {formatSourceLinks(paragraph)}
+              </p>
+            );
+          }
+        })}
+      </>
+    );
   };
   
   /**
@@ -180,7 +227,7 @@ const ChatView: React.FC = () => {
             key={message.id} 
             className={`message ${message.sender === 'bot' ? 'bot-message' : 'user-message'}`}
           >
-            {formatMessageWithLinks(message.text)}
+            {formatMessageContent(message.text)}
           </div>
         ))}
         

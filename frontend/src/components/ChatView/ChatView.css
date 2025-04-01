@@ -38,8 +38,7 @@
 
 /* Message Styling */
 .message {
-  display: flex;
-  align-items: flex-start;
+  display: block; /* Changed from flex to block for proper text flow */
   max-width: 70%;
   padding: 15px 20px;
   border-radius: 15px;
@@ -47,7 +46,7 @@
   font-size: 16px;
   word-wrap: break-word;
   animation: fadeIn 0.3s ease-out forwards;
-  text-align: left; /* Added this line to ensure text is left-aligned */
+  text-align: left;
 }
 
 @keyframes fadeIn {
@@ -89,6 +88,36 @@
 .user-message .source-link {
   color: #ffffff;
   text-decoration-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Fix for consecutive paragraphs */
+.message p {
+  margin-bottom: 12px;
+  display: block;
+  width: 100%;
+}
+
+/* Ensure numbered lists display correctly */
+.message ol {
+  display: block;
+  width: 100%;
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+/* Ensure bulleted lists display correctly */
+.message ul {
+  display: block;
+  width: 100%;
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+/* Ensure line breaks work properly */
+.message br {
+  display: block;
+  content: "";
+  margin-top: 10px;
 }
 
 /* Typing Indicator */
