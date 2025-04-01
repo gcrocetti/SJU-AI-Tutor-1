@@ -193,6 +193,9 @@ please include the source URLs directly in your response in the following format
 When including multiple sources, name each one separately with its URL:
 "According to [Source: https://example1.com] and [Source: https://example2.com], ..."
 
+IMPORTANT: Always use the exact format [Source: URL] so that the frontend can properly 
+format these as hyperlinks. Do not use variations like [Source 1: URL], just [Source: URL].
+
 If you don't know the answer or need more specific information, please say so.
 """)
     ])
@@ -211,10 +214,16 @@ If you don't know the answer or need more specific information, please say so.
         chain = response_prompt | llm | StrOutputParser()
         response = chain.invoke({"history": history})
         
+        # Post-process response to ensure correct source formatting
+        # This is a backup in case the LLM doesn't follow instructions exactly
+        import re
+        source_pattern = r'\[(Source) \d+: (https?://[^\]]+)\]'
+        corrected_response = re.sub(source_pattern, r'[Source: \2]', response)
+        
         # Update state
         new_state = state.copy()
-        new_state["final_response"] = response
-        logger.info(f"Generated response: {response[:50]}...")
+        new_state["final_response"] = corrected_response
+        logger.info(f"Generated response: {corrected_response[:50]}...")
         
         return new_state
     except Exception as e:

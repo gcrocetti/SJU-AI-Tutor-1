@@ -1,22 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import { 
   Conversation, 
-  Message,
-  SendMessageRequest
+  Message
 } from '../types';
 
 /**
  * ChatService
  * 
  * Service class for handling all chat-related operations.
- * Currently provides mock data, but designed to be connected to a
- * backend API in the future that interfaces with:
+ * Connects to the Flask backend API that interfaces with:
  * - OpenAI's ChatGPT APIs for the LLM
  * - Pinecone for vector storage and retrieval
  * - LangChain/LangGraph for orchestration
- * 
- * All methods return promises to simulate asynchronous API calls,
- * which will make the transition to real API calls smoother.
  */
 export class ChatService {
   /**
@@ -28,78 +23,54 @@ export class ChatService {
    * 3. Receiving and processing the AI response
    * 
    * @param text - The user's message text
-   * @param conversationId - Optional ID of an existing conversation
+   * @param sessionId - Optional ID of an existing conversation
    * @returns Promise resolving to the AI's response message
-   * 
-   * TODO: Implement actual API integration with:
-   * - Error handling and retries
-   * - Conversation history context
-   * - Streaming responses
-   * - Citation and source tracking
    */
-  async sendMessage(text: string, conversationId?: string): Promise<Message> {
-    // Generate a new conversation ID if none is provided
-    if (!conversationId) {
-      conversationId = uuidv4();
-    }
-    
-    // Create the request object that would be sent to a real API
-    const request: SendMessageRequest = {
-      conversationId,
-      text,
-      userId: 'current-user' // In a real app, this would come from authentication
+  async sendMessage(text: string, sessionId?: string): Promise<Message> {
+    // Create the request object
+    const request = {
+      message: text,
+      session_id: sessionId
     };
     
     try {
-      // MOCK API CALL - In production, this would be a real API request
-      console.log('[MOCK] Sending message to API:', request);
+      // Make the API call to the Flask backend
+      const response = await fetch('http://localhost:5000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(request)
+      });
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get response from server');
+      }
       
-      /**
-       * In the real implementation, this would call an endpoint like:
-       * 
-       * const response = await fetch('/api/chat', {
-       *   method: 'POST',
-       *   headers: { 
-       *     'Content-Type': 'application/json',
-       *     'Authorization': `Bearer ${authToken}`
-       *   },
-       *   body: JSON.stringify(request)
-       * });
-       * 
-       * const result = await response.json();
-       * 
-       * if (!response.ok) {
-       *   throw new Error(result.error || 'Failed to send message');
-       * }
-       * 
-       * return result.message;
-       */
+      // Parse the response
+      const result = await response.json();
       
-      // Create a mock bot response for now
+      // Store session ID from response
+      const returnedSessionId = result.session_id || sessionId;
+      
+      // Create a formatted bot message from the response
       const botMessage: Message = {
         id: uuidv4(),
-        text: this.generateMockResponse(),
+        text: result.response,
         sender: 'bot',
         timestamp: new Date(),
         metadata: {
+          // Include which agents were used and the session ID
           thinking: true,
-          actions: [
-            {
-              type: 'retrieve',
-              input: { query: text },
-              output: { documents: 3 },
-              timestamp: new Date().toISOString()
-            },
-            {
-              type: 'generate',
-              input: { context: 'Retrieved documents and query' },
-              output: { response: 'Generated response' },
-              timestamp: new Date().toISOString()
-            }
-          ]
+          sessionId: returnedSessionId,
+          actions: result.used_agents?.map((agent: string) => ({
+            type: 'agent',
+            input: { name: agent },
+            output: { used: true },
+            timestamp: new Date().toISOString()
+          })) || []
         }
       };
       
@@ -115,42 +86,28 @@ export class ChatService {
    * Get a list of the user's conversations
    * 
    * @returns Promise resolving to an array of conversations
-   * 
-   * TODO: Implement actual API integration with:
-   * - Pagination
-   * - Filtering
-   * - Sorting options
    */
   async getConversations(): Promise<Conversation[]> {
     try {
-      // MOCK DATA - In production, this would come from a real API call
+      // Make API call to the sessions endpoint
+      const response = await fetch('http://localhost:5000/api/sessions');
       
-      /**
-       * In the real implementation, this would call an endpoint like:
-       * 
-       * const response = await fetch('/api/chat', {
-       *   headers: { 'Authorization': `Bearer ${authToken}` }
-       * });
-       * 
-       * const result = await response.json();
-       * 
-       * if (!response.ok) {
-       *   throw new Error(result.error || 'Failed to fetch conversations');
-       * }
-       * 
-       * return result.conversations;
-       */
+      if (!response.ok) {
+        throw new Error('Failed to fetch conversations');
+      }
       
-      // Return mock conversations for now
-      return [
-        {
-          id: '1',
-          title: 'Getting started with LST1000',
-          messages: [],
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      ];
+      const result = await response.json();
+      
+      // Format the sessions into conversations
+      const conversations: Conversation[] = result.sessions.map((sessionId: string) => ({
+        id: sessionId,
+        title: `Conversation ${sessionId.substring(0, 8)}`,
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+      
+      return conversations;
     } catch (error) {
       console.error('Failed to fetch conversations', error);
       return [];
@@ -162,46 +119,33 @@ export class ChatService {
    * 
    * @param id - The ID of the conversation to retrieve
    * @returns Promise resolving to the conversation or null if not found
-   * 
-   * TODO: Implement actual API integration with:
-   * - Message pagination
-   * - Full conversation context
    */
   async getConversation(id: string): Promise<Conversation | null> {
     try {
-      // MOCK DATA - In production, this would come from a real API call
+      // Make API call to get the specific session
+      const response = await fetch(`http://localhost:5000/api/sessions/${id}`);
       
-      /**
-       * In the real implementation, this would call an endpoint like:
-       * 
-       * const response = await fetch(`/api/chat/${id}`, {
-       *   headers: { 'Authorization': `Bearer ${authToken}` }
-       * });
-       * 
-       * const result = await response.json();
-       * 
-       * if (!response.ok) {
-       *   throw new Error(result.error || 'Failed to fetch conversation');
-       * }
-       * 
-       * return result.conversation;
-       */
+      if (!response.ok) {
+        throw new Error(`Failed to fetch conversation ${id}`);
+      }
       
-      // Return a mock conversation for now
-      return {
-        id,
-        title: 'Getting started with LST1000',
-        messages: [
-          {
-            id: '1',
-            text: 'Hello! How can I help you with LST1000 today?',
-            sender: 'bot',
-            timestamp: new Date(Date.now() - 60000)
-          }
-        ],
-        createdAt: new Date(Date.now() - 60000),
-        updatedAt: new Date(Date.now() - 60000)
+      const result = await response.json();
+      
+      // Format the session into a conversation
+      const conversation: Conversation = {
+        id: result.session_id,
+        title: `Conversation ${result.session_id.substring(0, 8)}`,
+        messages: result.messages.map((msg: any) => ({
+          id: uuidv4(),
+          text: msg.content,
+          sender: msg.role === 'user' ? 'user' : 'bot',
+          timestamp: new Date()
+        })),
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
+      
+      return conversation;
     } catch (error) {
       console.error(`Failed to fetch conversation ${id}`, error);
       return null;
@@ -213,37 +157,13 @@ export class ChatService {
    * 
    * @param title - Optional title for the conversation
    * @returns Promise resolving to the new conversation
-   * 
-   * TODO: Implement actual API integration
    */
   async createConversation(title?: string): Promise<Conversation> {
     const id = uuidv4();
     const now = new Date();
     
-    // MOCK DATA - In production, this would be created via API call
-    
-    /**
-     * In the real implementation, this would call an endpoint like:
-     * 
-     * const response = await fetch('/api/chat', {
-     *   method: 'POST',
-     *   headers: { 
-     *     'Content-Type': 'application/json',
-     *     'Authorization': `Bearer ${authToken}`
-     *   },
-     *   body: JSON.stringify({ title: title || 'New Conversation' })
-     * });
-     * 
-     * const result = await response.json();
-     * 
-     * if (!response.ok) {
-     *   throw new Error(result.error || 'Failed to create conversation');
-     * }
-     * 
-     * return result.conversation;
-     */
-    
-    // Create a mock conversation for now
+    // Create a new conversation locally
+    // In a full implementation, this could call the API to initialize a new session
     const newConversation: Conversation = {
       id,
       title: title || 'New Conversation',
@@ -253,23 +173,6 @@ export class ChatService {
     };
     
     return newConversation;
-  }
-  
-  /**
-   * Generate a mock response for demo purposes
-   * 
-   * @returns A random response string
-   */
-  private generateMockResponse(): string {
-    const responses = [
-      "I understand your question about LST1000. Let me explain the concept in more detail...",
-      "That's a great question! In language studies, we often approach this by...",
-      "Based on the course materials, the key points to remember are...",
-      "I'd be happy to help you with that assignment. First, let's break down what's being asked...",
-      "Looking at your progress so far, I think you're doing well, but might want to focus more on..."
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
   }
 }
 

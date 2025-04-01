@@ -39,6 +39,8 @@ export interface Message {
     citations?: Citation[];
     /** Confidence score of the response (0-100) */
     confidence?: number;
+    /** Session ID for maintaining conversation context */
+    sessionId?: string;
   };
 }
 
