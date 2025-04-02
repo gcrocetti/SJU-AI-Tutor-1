@@ -1,10 +1,14 @@
 // src/components/DiagnosticsViewPage/DiagnosticsViewPage.tsx
 import { useNavigate } from 'react-router-dom';
 import DiagnosticsView from '../DiagnosticView/DiagnosticView';
+import useDocumentTitle from '../../hooks/useDocumentTitle';
 import './DiagnosticViewPage.css';
 
 const DiagnosticsViewPage: React.FC = () => {
   const navigate = useNavigate();
+  
+  // Set the document title for the diagnostics page
+  useDocumentTitle('Student Progress');
   
   return (
     <div className="diagnostics-page">

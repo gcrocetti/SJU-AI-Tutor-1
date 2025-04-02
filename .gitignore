@@ -88,3 +88,6 @@ frontend/yarn-error.log*
 *.faiss
 *.pkl
 *.bin
+
+# Claude AI assistant files
+CLAUDE.md
