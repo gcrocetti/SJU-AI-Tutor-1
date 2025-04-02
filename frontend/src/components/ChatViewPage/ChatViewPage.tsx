@@ -1,9 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import ChatView from '../ChatView/ChatView';
+import useDocumentTitle from '../../hooks/useDocumentTitle';
 import './ChatViewPage.css';
 
 const ChatViewPage: React.FC = () => {
   const navigate = useNavigate();
+  
+  // Set the document title for the chat page
+  useDocumentTitle('CIRO');
   
   return (
     <div className="chat-page">
