@@ -41,6 +41,8 @@ const ChatView: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
   
+  // No replacement
+  
   /**
    * Updates the input field state as the user types
    * 

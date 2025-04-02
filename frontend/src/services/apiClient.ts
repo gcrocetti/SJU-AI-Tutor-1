@@ -60,43 +60,59 @@ export class ApiClient {
         });
       }
       
-      // MOCK API CALL - In production, this would be a real fetch request
-      console.log(`[MOCK API] GET request to ${url.toString()}`);
+      console.log(`Making GET request to ${url.toString()}`);
       
-      /**
-       * In the real implementation, this would be:
-       * 
-       * const response = await fetch(url.toString(), {
-       *   method: 'GET',
-       *   headers: {
-       *     'Accept': 'application/json',
-       *     'Authorization': `Bearer ${this.getAuthToken()}`
-       *   }
-       * });
-       * 
-       * const data = await response.json();
-       * 
-       * if (!response.ok) {
-       *   return {
-       *     success: false,
-       *     error: {
-       *       code: response.status.toString(),
-       *       message: data.message || 'Unknown error occurred'
-       *     }
-       *   };
-       * }
-       * 
-       * return {
-       *   success: true,
-       *   data: data as T
-       * };
-       */
+      // Get auth token from localStorage
+      const authToken = localStorage.getItem('authToken');
       
-      // Mock success response - this would be replaced with actual API logic
-      return {
-        success: true,
-        data: {} as T
-      };
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+        }
+      });
+      
+      if (!response.ok) {
+        // Handle unauthorized errors (expired token)
+        if (response.status === 401) {
+          // Clear the token if it's expired
+          localStorage.removeItem('authToken');
+        }
+        
+        let errorMsg = 'Unknown error occurred';
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (e) {
+          // If error response is not JSON, just use status text
+          errorMsg = response.statusText;
+        }
+        
+        return {
+          success: false,
+          error: {
+            code: response.status.toString(),
+            message: errorMsg
+          }
+        };
+      }
+      
+      try {
+        const data = await response.json();
+        return {
+          success: true,
+          data: data as T
+        };
+      } catch (e) {
+        return {
+          success: false,
+          error: {
+            code: 'PARSE_ERROR',
+            message: 'Failed to parse response'
+          }
+        };
+      }
     } catch (error) {
       // Log the error for debugging
       console.error('API request failed', error);
@@ -130,45 +146,61 @@ export class ApiClient {
       // Construct the full URL
       const url = this.baseUrl + endpoint;
       
-      // MOCK API CALL - In production, this would be a real fetch request
-      console.log(`[MOCK API] POST request to ${url}`, data);
+      console.log(`Making POST request to ${url}`, data);
       
-      /**
-       * In the real implementation, this would be:
-       * 
-       * const response = await fetch(url, {
-       *   method: 'POST',
-       *   headers: {
-       *     'Content-Type': 'application/json',
-       *     'Accept': 'application/json',
-       *     'Authorization': `Bearer ${this.getAuthToken()}`
-       *   },
-       *   body: JSON.stringify(data)
-       * });
-       * 
-       * const responseData = await response.json();
-       * 
-       * if (!response.ok) {
-       *   return {
-       *     success: false,
-       *     error: {
-       *       code: response.status.toString(),
-       *       message: responseData.message || 'Unknown error occurred'
-       *     }
-       *   };
-       * }
-       * 
-       * return {
-       *   success: true,
-       *   data: responseData as T
-       * };
-       */
+      // Get auth token from localStorage
+      const authToken = localStorage.getItem('authToken');
       
-      // Mock success response - this would be replaced with actual API logic
-      return {
-        success: true,
-        data: {} as T
-      };
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+        },
+        body: JSON.stringify(data)
+      });
+      
+      if (!response.ok) {
+        // Handle unauthorized errors (expired token)
+        if (response.status === 401) {
+          // Clear the token if it's expired
+          localStorage.removeItem('authToken');
+        }
+        
+        let errorMsg = 'Unknown error occurred';
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (e) {
+          // If error response is not JSON, just use status text
+          errorMsg = response.statusText;
+        }
+        
+        return {
+          success: false,
+          error: {
+            code: response.status.toString(),
+            message: errorMsg
+          }
+        };
+      }
+      
+      try {
+        const responseData = await response.json();
+        return {
+          success: true,
+          data: responseData as T
+        };
+      } catch (e) {
+        return {
+          success: false,
+          error: {
+            code: 'PARSE_ERROR',
+            message: 'Failed to parse response'
+          }
+        };
+      }
     } catch (error) {
       // Log the error for debugging
       console.error('API request failed', error);
