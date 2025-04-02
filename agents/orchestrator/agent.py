@@ -65,7 +65,7 @@ class AgentSelection(BaseModel):
     
     @validator('selected_agents')
     def validate_selected_agents(cls, v):
-        valid_agents = {"university", "motivator"}
+        valid_agents = {"university", "motivator", "teacher"}
         for agent in v:
             if agent not in valid_agents:
                 raise ValueError(f"Invalid agent ID: {agent}. Must be one of {valid_agents}")
@@ -177,13 +177,45 @@ Return your analysis as a JSON object with:
         logger.error(f"Error in query analysis: {e}")
         new_state = state.copy()
         new_state["error"] = f"Failed to analyze query: {str(e)}"
-        # Default to university agent if analysis fails
-        new_state["agent_selection"] = {
-            "selected_agents": ["university"],
-            "subqueries": {"university": state["query"]},
-            "primary_intent": "information",
-            "require_aggregation": False
-        }
+        
+        # If query mentions syllabus, route to teacher agent by default
+        query_lower = state["query"].lower()
+        syllabus_keywords = [
+            # Traditional syllabus keywords
+            "syllabus", "syllabi", "topics", "course content", "we're learning", 
+            "studying", "topics for this week", "topics this week",
+            
+            # Student conversational variations
+            "topics are up for discussion", "topics for discussion", 
+            "material is on the syllabus", "material on the syllabus",
+            "main subjects", "subjects covered", "overview of what we're learning",
+            "topics should i focus", "covered in the course", "should i be studying",
+            "syllabus for this semester", "key topics", "course outline",
+            "subjects included", "summarize what we're learning",
+            "what are we learning", "what am i supposed to learn",
+            "what's included in this course", "what's on the agenda",
+            "what are the areas", "what should we discuss", "topics available",
+            "course overview", "what will we cover", "class topics", "overview of topics",
+            "available courses", "what courses", "list of courses"
+        ]
+        
+        if any(keyword in query_lower for keyword in syllabus_keywords):
+            # Default to teacher agent for syllabus-related queries
+            new_state["agent_selection"] = {
+                "selected_agents": ["teacher"],
+                "subqueries": {"teacher": state["query"]},
+                "primary_intent": "syllabus information",
+                "require_aggregation": False
+            }
+            logger.info(f"Detected syllabus-related query, routing to teacher agent: {state['query']}")
+        else:
+            # Default to university agent for other queries
+            new_state["agent_selection"] = {
+                "selected_agents": ["university"],
+                "subqueries": {"university": state["query"]},
+                "primary_intent": "information",
+                "require_aggregation": False
+            }
         return new_state
 
 
@@ -219,6 +251,11 @@ def route_to_agents(state: OrchestratorState) -> OrchestratorState:
             elif agent_id == "motivator":
                 from agents.motivator_agent.agent import process_query as motivator_process
                 response = motivator_process(subquery, state["session_id"], state["messages"])
+                agent_responses[agent_id] = response
+                
+            elif agent_id == "teacher":
+                from agents.teacher_agent.agent import process_query as teacher_process
+                response = teacher_process(subquery, state["session_id"], state["messages"])
                 agent_responses[agent_id] = response
                 
             else:

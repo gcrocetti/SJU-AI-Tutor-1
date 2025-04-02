@@ -16,3 +16,6 @@ export * from './chat';
 
 // Diagnostics and student data related types
 export * from './diagnostics';
+
+// Authentication and user related types
+export * from './auth';

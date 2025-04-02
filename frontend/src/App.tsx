@@ -1,6 +1,9 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import ChatViewPage from './components/ChatViewPage/ChatViewPage';
 import DiagnosticViewPage from './components/DiagnosticViewPage/DiagnosticViewPage';
+import AuthPage from './components/AuthPage';
+import authService from './services/authService';
 import './App.css';
 
 /**
@@ -15,7 +18,7 @@ import './App.css';
  * 2. Diagnostics View ('/diagnostics') - A dashboard showing student progress and resources
  * 
  * Future enhancements may include:
- * - Authentication routes
+ * - Authentication persistence across refreshes
  * - Settings pages
  * - Admin interfaces
  * - Error boundaries
@@ -27,28 +30,72 @@ import './App.css';
  * )
  */
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+
+  // Check authentication status on app load
+  useEffect(() => {
+    const checkAuth = () => {
+      const isLoggedIn = authService.isAuthenticated();
+      setIsAuthenticated(isLoggedIn);
+    };
+    
+    checkAuth();
+    
+    // Set up event listener for auth changes (like storage events)
+    window.addEventListener('storage', checkAuth);
+    
+    return () => {
+      window.removeEventListener('storage', checkAuth);
+    };
+  }, []);
+  
+  const handleAuthSuccess = () => {
+    setIsAuthenticated(true);
+  };
+  
+  const handleLogout = () => {
+    authService.signout();
+    setIsAuthenticated(false);
+  };
+
   return (
     <BrowserRouter>
       <div className="app-container">
-        {/* Global header - present on all pages */}
-        <header className="header">Ciro AI Tutor</header>
+        {/* Global header - present on all pages when authenticated */}
+        {isAuthenticated && (
+          <header className="header">
+            <div className="header-left"></div>
+            <div className="header-center">Ciro AI Tutor</div>
+            <div className="header-right">
+              <button className="logout-button" onClick={handleLogout}>
+                Log Out
+              </button>
+            </div>
+          </header>
+        )}
         
         {/* Main content area - houses all routes */}
-        <div className="content-container">
+        <div className={`content-container ${!isAuthenticated ? 'full-height' : ''}`}>
           <Routes>
-            {/* Homepage/Chat route */}
-            <Route path="/" element={<ChatViewPage />} />
+            {/* Auth routes - accessible when not authenticated */}
+            <Route
+              path="/login"
+              element={isAuthenticated ? <Navigate to="/" /> : <AuthPage onAuthSuccess={handleAuthSuccess} />}
+            />
             
-            {/* Diagnostics dashboard route */}
-            <Route path="/diagnostics" element={<DiagnosticViewPage />} />
+            {/* Protected routes - redirect to login if not authenticated */}
+            <Route
+              path="/"
+              element={isAuthenticated ? <ChatViewPage /> : <Navigate to="/login" />}
+            />
             
-            {/* 
-              TODO: Add additional routes:
-              - Authentication routes (login, signup, forgot password)
-              - User profile/settings
-              - Error pages (404, 500, etc.)
-              - Help/documentation pages
-            */}
+            <Route
+              path="/diagnostics"
+              element={isAuthenticated ? <DiagnosticViewPage /> : <Navigate to="/login" />}
+            />
+            
+            {/* Default redirect */}
+            <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
           </Routes>
         </div>
       </div>

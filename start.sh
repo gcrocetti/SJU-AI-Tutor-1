@@ -14,9 +14,9 @@ command_exists() {
 }
 
 # Check for required commands
-if ! command_exists python; then
-  echo -e "${YELLOW}Python is not installed. Please install Python 3.8 or higher.${NC}"
-  exit 1
+if ! command_exists python || ! command_exists python3; then
+  echo -e "${YELLOW}Python is not found in PATH. Will use the Python from the venv once activated.${NC}"
+  # Continue anyway, as we'll use the Python from the virtual environment
 fi
 
 if ! command_exists npm; then

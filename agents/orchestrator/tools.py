@@ -24,9 +24,9 @@ def format_agent_descriptions() -> str:
         "university": {
             "id": "university",
             "name": "University Information Agent",
-            "expertise": "Academic programs, admissions, campus resources, policies, procedures, courses, deadlines",
+            "expertise": "Academic programs, admissions, campus resources, policies, procedures, deadlines",
             "best_for": "Factual questions about university information, procedures, requirements",
-            "avoid_for": "Emotional support, motivation, personal well-being issues",
+            "avoid_for": "Emotional support, motivation, personal well-being issues, ANY syllabus or course content questions",
             "example_queries": [
                 "What are the requirements for the computer science major?",
                 "When is the registration deadline for fall semester?",
@@ -41,13 +41,32 @@ def format_agent_descriptions() -> str:
             "name": "Motivator Agent (Emotional Support Specialist)",
             "expertise": "Stress management, motivation, academic anxiety, emotional well-being, confidence building",
             "best_for": "Emotional support, motivation strategies, stress management techniques",
-            "avoid_for": "Specific factual information about university policies or procedures",
+            "avoid_for": "Specific factual information about university policies or procedures, course content or syllabi",
             "example_queries": [
                 "I'm feeling overwhelmed with my coursework",
                 "How do I stay motivated during finals?",
                 "I'm anxious about my upcoming exams",
                 "I'm struggling to balance school and work",
                 "I don't feel confident in my abilities"
+            ]
+        },
+        
+        "teacher": {
+            "id": "teacher",
+            "name": "Teacher Agent (Content & Concept Specialist)",
+            "expertise": "Course content delivery, syllabus information, supplemental materials, probing questions, lesson reviews, progress tracking",
+            "best_for": "Deep learning of course material, understanding concepts, study guidance, content exploration, ALL syllabus and course topics",
+            "exclusive_for": "Any syllabus-related queries, course content overview, class topics, discussion topics",
+            "avoid_for": "University policies, general university information, emotional support",
+            "example_queries": [
+                "Can you help me understand object-oriented programming?",
+                "I'm confused about the concept of neural networks",
+                "What are the key components of a literature review?",
+                "What topics are covered in the syllabus?",
+                "What should I be studying for this course?",
+                "Can you summarize the main points from today's lecture?",
+                "What topics are up for discussion today?",
+                "Can you give me an overview of what we're learning?"
             ]
         }
     }
@@ -58,6 +77,8 @@ def format_agent_descriptions() -> str:
         formatted_text.append(f"NAME: {agent['name']}")
         formatted_text.append(f"EXPERTISE: {agent['expertise']}")
         formatted_text.append(f"BEST FOR: {agent['best_for']}")
+        if "exclusive_for" in agent:
+            formatted_text.append(f"EXCLUSIVE FOR: {agent['exclusive_for']}")
         formatted_text.append(f"AVOID FOR: {agent['avoid_for']}")
         formatted_text.append("EXAMPLE QUERIES:")
         for example in agent['example_queries']:
@@ -168,6 +189,48 @@ def identify_university_information_content(text: str) -> Tuple[bool, float]:
     return has_university, confidence
 
 
+def identify_educational_content(text: str) -> Tuple[bool, float]:
+    """
+    Identify content requesting educational content or concept explanation.
+    
+    Args:
+        text: The text to analyze
+        
+    Returns:
+        Tuple of (has_educational_content, confidence_score)
+    """
+    # Keywords related to learning and understanding course content
+    educational_terms = [
+        "understand", "concept", "explain", "confused", "learning", "learn",
+        "help me with", "topic", "subject", "material", "lecture", "textbook",
+        "chapter", "homework", "assignment", "problem", "exercise", "quiz", 
+        "test", "exam", "study", "practice", "example", "theory", "principle",
+        "method", "technique", "formula", "equation", "definition", "summarize",
+        "review", "notes", "reading"
+    ]
+    
+    # Terms specific to asking for deeper understanding
+    deeper_understanding = [
+        "why", "how does", "explain", "help me understand", "confused about",
+        "clarify", "don't get", "don't understand", "struggling with", 
+        "having trouble with", "what does this mean", "can you help me",
+        "elaborate", "more detail", "examples", "simplify"
+    ]
+    
+    # Count occurrences
+    text_lower = text.lower()
+    educational_count = sum(term in text_lower for term in educational_terms)
+    understanding_count = sum(term in text_lower for term in deeper_understanding)
+    
+    # Calculate confidence score
+    confidence = min(1.0, (educational_count * 0.15) + (understanding_count * 0.25))
+    
+    # Determine if educational content is requested
+    has_educational = educational_count > 0 or understanding_count > 0
+    
+    return has_educational, confidence
+
+
 def extract_query_components(text: str) -> Dict[str, Any]:
     """
     Extract key components from a query to help with routing.
@@ -181,6 +244,7 @@ def extract_query_components(text: str) -> Dict[str, Any]:
     components = {
         "emotional_content": False,
         "information_request": False,
+        "educational_content": False,
         "question_marks_count": text.count("?"),
         "word_count": len(text.split()),
         "suggested_agents": set()
@@ -201,6 +265,14 @@ def extract_query_components(text: str) -> Dict[str, Any]:
     
     if information and info_conf > 0.2:
         components["suggested_agents"].add("university")
+    
+    # Check for educational content requests
+    educational, edu_conf = identify_educational_content(text)
+    components["educational_content"] = educational
+    components["educational_confidence"] = edu_conf
+    
+    if educational and edu_conf > 0.25:
+        components["suggested_agents"].add("teacher")
     
     # Convert set to list for serialization
     components["suggested_agents"] = list(components["suggested_agents"])
