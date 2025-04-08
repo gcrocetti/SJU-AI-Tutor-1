@@ -368,6 +368,37 @@ export class AuthService {
   isAuthenticated(): boolean {
     return !!this.getAuthToken();
   }
+  
+  /**
+   * Get the current user's ID
+   * 
+   * @returns User ID from the stored profile, or null if not available
+   */
+  getUserId(): string | null {
+    try {
+      const profileStr = localStorage.getItem('userProfile');
+      if (!profileStr) return null;
+      
+      const profile = JSON.parse(profileStr) as UserProfile;
+      return profile.sub || null;
+    } catch (error) {
+      console.error('Error retrieving user ID:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Save the user profile to local storage
+   * 
+   * @param profile - The user profile to save
+   */
+  private saveUserProfile(profile: UserProfile): void {
+    try {
+      localStorage.setItem('userProfile', JSON.stringify(profile));
+    } catch (error) {
+      console.error('Error saving user profile:', error);
+    }
+  }
 }
 
 export const authService = new AuthService();

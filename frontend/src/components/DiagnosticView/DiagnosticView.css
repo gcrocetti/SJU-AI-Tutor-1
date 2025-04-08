@@ -224,6 +224,22 @@
 }
 
 /* Resources and links */
+.resource-category {
+  margin-bottom: 15px;
+}
+
+.resource-category h5 {
+  color: #cf102d;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #f0f0f0;
+  font-family: 'Georgia', serif;
+}
+
+.resources-list {
+  padding-left: 5px;
+}
+
 .resource-item {
   margin-bottom: 10px;
 }
@@ -231,10 +247,13 @@
 .resource-item a {
   color: #cf102d;
   text-decoration: none;
+  font-family: 'Georgia', serif;
+  transition: color 0.2s;
 }
 
 .resource-item a:hover {
   text-decoration: underline;
+  color: #a31426;
 }
 
 /* Announcements */
