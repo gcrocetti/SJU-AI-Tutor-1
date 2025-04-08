@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import ChatViewPage from './components/ChatViewPage/ChatViewPage';
 import DiagnosticViewPage from './components/DiagnosticViewPage/DiagnosticViewPage';
+import ChapterList from './components/ChapterList';
+import ChapterQuiz from './components/ChapterQuiz';
 import AuthPage from './components/AuthPage';
 import authService from './services/authService';
 import './App.css';
@@ -65,7 +67,7 @@ function App() {
         {isAuthenticated && (
           <header className="header">
             <div className="header-left"></div>
-            <div className="header-center">Ciro AI Tutor</div>
+            <div className="header-center">CIRO AI Tutor</div>
             <div className="header-right">
               <button className="logout-button" onClick={handleLogout}>
                 Log Out
@@ -92,6 +94,16 @@ function App() {
             <Route
               path="/diagnostics"
               element={isAuthenticated ? <DiagnosticViewPage /> : <Navigate to="/login" />}
+            />
+            
+            <Route
+              path="/diagnostics/chapters"
+              element={isAuthenticated ? <ChapterList /> : <Navigate to="/login" />}
+            />
+            
+            <Route
+              path="/diagnostics/quiz/:chapterId"
+              element={isAuthenticated ? <ChapterQuiz /> : <Navigate to="/login" />}
             />
             
             {/* Default redirect */}

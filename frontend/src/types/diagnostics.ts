@@ -105,6 +105,89 @@ export interface KnowledgeCheckQuestion {
   difficulty: 'easy' | 'medium' | 'hard';
   /** Subject category */
   category: string;
+  /** Optional explanation for the answer */
+  explanation?: string;
+}
+
+/**
+ * Quiz Question Type
+ * 
+ * Enhanced question type for the multi-question knowledge check quizzes.
+ */
+export interface QuizQuestion {
+  /** The question text */
+  question: string;
+  /** Array of possible answers */
+  options: string[];
+  /** Index of the correct answer in the options array (0-based) */
+  correctIndex: number;
+  /** Explanation of why the answer is correct */
+  explanation: string;
+}
+
+/**
+ * Quiz Result Type
+ * 
+ * Represents the results of a completed quiz.
+ */
+export interface QuizResult {
+  /** User ID who took the quiz */
+  userId: string;
+  /** Chapter ID for the quiz */
+  chapterId: string;
+  /** Number of correct answers */
+  correct: number;
+  /** Total number of questions */
+  total: number;
+  /** Percentage score (0-100) */
+  percentage: number;
+  /** Array of the user's answer indices */
+  userAnswers: number[];
+  /** User's best scores by chapter */
+  bestScores?: Record<string, number>;
+  /** Number of attempts by chapter */
+  attemptCounts?: Record<string, number>;
+}
+
+/**
+ * Chapter Type
+ * 
+ * Represents a course chapter for knowledge checks.
+ */
+export interface Chapter {
+  /** Unique identifier for the chapter */
+  id: string;
+  /** Chapter title */
+  title: string;
+  /** Brief description of chapter contents */
+  description: string;
+  /** Best score achieved (0-100) */
+  bestScore?: number;
+  /** Number of attempts made */
+  attempts?: number;
+}
+
+/**
+ * Text Evaluation Type
+ * 
+ * Represents the evaluation of a free-form text response.
+ */
+export interface TextEvaluation {
+  /** Individual scores by category */
+  scores: {
+    /** Accuracy of information (0-3) */
+    accuracy: number;
+    /** Depth of understanding (0-3) */
+    depth: number;
+    /** Clarity of expression (0-2) */
+    clarity: number;
+    /** Application of concepts (0-2) */
+    application: number;
+  };
+  /** Total score (0-10) */
+  totalScore: number;
+  /** Feedback text */
+  feedback: string;
 }
 
 /**
