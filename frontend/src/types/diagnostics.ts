@@ -119,10 +119,26 @@ export interface QuizQuestion {
   question: string;
   /** Array of possible answers */
   options: string[];
-  /** Index of the correct answer in the options array (0-based) */
-  correctIndex: number;
+  /** Index of the correct answer in the options array (0-based) 
+   * This will only be available on the server side or after submission
+   */
+  correctIndex?: number;
   /** Explanation of why the answer is correct */
-  explanation: string;
+  explanation?: string;
+}
+
+/**
+ * Frontend Quiz Question Type
+ * 
+ * Version of question without correct answers for initial display
+ */
+export interface FrontendQuizQuestion {
+  /** Unique ID for the question */
+  id: string;
+  /** The question text */
+  question: string;
+  /** Array of possible answers */
+  options: string[];
 }
 
 /**
@@ -147,6 +163,8 @@ export interface QuizResult {
   bestScores?: Record<string, number>;
   /** Number of attempts by chapter */
   attemptCounts?: Record<string, number>;
+  /** Full quiz questions with correct answers (only available after submission) */
+  questions?: QuizQuestion[];
 }
 
 /**

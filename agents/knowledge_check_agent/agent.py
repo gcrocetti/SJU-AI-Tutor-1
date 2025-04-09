@@ -20,21 +20,64 @@ from .prompts import (
 )
 from .tools import store_quiz_result, get_user_chapter_stats
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# Initialize OpenAI client with fallback
+openai_api_key = os.getenv('OPENAI_API_KEY')
+if openai_api_key:
+    client = OpenAI(api_key=openai_api_key)
+else:
+    # Provide mock client functionality for development purposes when no API key is available
+    from unittest.mock import MagicMock
+    
+    # Create a mock OpenAI client
+    client = MagicMock()
+    
+    # Configure the mock to return sample data for completions
+    def mock_completion(**kwargs):
+        mock_resp = MagicMock()
+        mock_resp.choices = [MagicMock()]
+        mock_resp.choices[0].message = MagicMock()
+        
+        # Different responses based on the provided system content
+        if kwargs.get('messages', [{}])[0].get('content', '').startswith('You are a computer science quiz generator'):
+            # Response for generate_questions
+            mock_resp.choices[0].message.content = json.dumps({
+                "questions": [
+                    {
+                        "question": "What is a variable in programming?",
+                        "options": ["A container for storing data values", "A fixed value", "A programming language", "A function"],
+                        "correctIndex": 0,
+                        "explanation": "A variable is a named storage location in a program that contains a value."
+                    }
+                ]
+            })
+        else:
+            # Response for evaluate_text_response
+            mock_resp.choices[0].message.content = json.dumps({
+                "strengths": "Good understanding of basic concepts",
+                "weaknesses": "Some details missing",
+                "suggestions": "Consider elaborating more on the core principles",
+                "totalScore": 7
+            })
+        
+        return mock_resp
+    
+    # Set up the chat.completions.create method to use our mock_completion function
+    client.chat.completions.create = mock_completion
+    
+    print("WARNING: OPENAI_API_KEY not set. Using mock OpenAI client with sample responses.")
 
-# Define chapter topics
+# Define chapter topics with more specific details to improve question quality
 CHAPTER_TOPICS = {
-    'chapter-1': 'Introduction to Computer Science and Programming',
-    'chapter-2': 'Basic Data Structures and Algorithms',
-    'chapter-3': 'Object-Oriented Programming Principles',
-    'chapter-4': 'Web Development Fundamentals',
-    'chapter-5': 'Database Design and SQL',
-    'chapter-6': 'Computer Networks and Security',
-    'chapter-7': 'Software Engineering Practices',
-    'chapter-8': 'Artificial Intelligence and Machine Learning Basics',
-    'chapter-9': 'Operating Systems and Computer Architecture',
-    'chapter-10': 'Modern Software Development Tools and Practices'
+    'chapter-1': 'Introduction to Computer Science and Programming - including computational thinking, algorithms, pseudocode, and basic programming concepts like variables, data types, operators, and control structures',
+    'chapter-2': 'Basic Data Structures and Algorithms - including arrays, linked lists, stacks, queues, searching, sorting, and algorithm complexity (Big O notation)',
+    'chapter-3': 'Object-Oriented Programming Principles - including classes, objects, inheritance, polymorphism, encapsulation, abstraction, and design patterns',
+    'chapter-4': 'Web Development Fundamentals - including HTML, CSS, JavaScript, DOM manipulation, RESTful APIs, client-server architecture, and responsive design',
+    'chapter-5': 'Database Design and SQL - including relational database concepts, ER diagrams, normalization, SQL queries, transactions, and indexing',
+    'chapter-6': 'Computer Networks and Security - including OSI model, TCP/IP, routing, DNS, encryption, authentication, firewalls, and common security vulnerabilities',
+    'chapter-7': 'Software Engineering Practices - including software development life cycle, requirements engineering, testing strategies, version control, agile methodologies, and DevOps',
+    'chapter-8': 'Artificial Intelligence and Machine Learning Basics - including supervised/unsupervised learning, neural networks, natural language processing, computer vision, and ethical considerations',
+    'chapter-9': 'Operating Systems and Computer Architecture - including processes, threads, memory management, file systems, CPU scheduling, and computer organization',
+    'chapter-10': 'Modern Software Development Tools and Practices - including cloud computing, containerization, microservices, CI/CD pipelines, and test-driven development'
 }
 
 def generate_questions(chapter_id: str, num_questions: int = 10) -> List[Dict[str, Any]]:
@@ -70,8 +113,9 @@ def generate_questions(chapter_id: str, num_questions: int = 10) -> List[Dict[st
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,
-            response_format={"type": "json_object"}
+            temperature=0.5,  # Lower temperature for more focused output
+            response_format={"type": "json_object"},
+            max_tokens=4000  # Ensure enough space for detailed questions and explanations
         )
         
         # Parse the response
@@ -82,9 +126,12 @@ def generate_questions(chapter_id: str, num_questions: int = 10) -> List[Dict[st
         if 'questions' in questions_data:
             # If the model wrapped the questions in a 'questions' field
             questions = questions_data['questions']
-        else:
-            # If the model returned the questions directly
+        elif isinstance(questions_data, list):
+            # If the model returned the questions as a list
             questions = questions_data
+        else:
+            # If the model returned the questions in some other format
+            questions = questions_data.get('questions', [])
             
         # Ensure we have the right number of questions
         questions = questions[:num_questions]

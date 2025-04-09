@@ -68,7 +68,7 @@
 }
 
 .start-quiz-button {
-  background-color: #007bff;
+  background-color: #cf102d; /* Changed to SJU red color */
   color: white;
   border: none;
   border-radius: 4px;
@@ -79,7 +79,7 @@
 }
 
 .start-quiz-button:hover {
-  background-color: #0069d9;
+  background-color: #a80d24; /* Darker shade for hover */
 }
 
 .start-quiz-button:disabled {
@@ -302,11 +302,10 @@
 }
 
 .explanation strong {
-  color: #333;
+  color: #cf102d; /* Match SJU red color */
   display: block;
   margin-bottom: 8px;
   font-size: 1.1rem;
-  color: #cf102d; /* Match SJU red color */
 }
 
 @keyframes fadeIn {
@@ -347,7 +346,6 @@
   background-color: #cf102d; /* Match SJU red color */
   color: white;
   font-weight: 500;
-  text-transform: none;
 }
 
 .quiz-button.next:hover {
@@ -363,8 +361,6 @@
 .quiz-button.submit {
   background-color: #cf102d; /* Match SJU red color */
   color: white;
-  font-weight: 500;
-  text-transform: none;
 }
 
 .quiz-button.submit:hover {
@@ -438,12 +434,12 @@
 }
 
 .results-button.retry {
-  background-color: #0d6efd;
+  background-color: #cf102d; /* Match SJU red color */
   color: white;
 }
 
 .results-button.retry:hover {
-  background-color: #0b5ed7;
+  background-color: #b10d26;
 }
 
 .results-button.back {

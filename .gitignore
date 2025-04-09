@@ -75,6 +75,10 @@ frontend/.env.production.local
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
+frontend/tsconfig.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js
+frontend/Tutor/
 
 # Jupyter Notebook
 .ipynb_checkpoints

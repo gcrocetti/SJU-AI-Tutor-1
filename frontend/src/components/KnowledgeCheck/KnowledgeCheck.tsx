@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Chapter, QuizQuestion, QuizResult } from '../../types';
+import { Chapter, QuizQuestion, QuizResult, FrontendQuizQuestion } from '../../types';
 import diagnosticService from '../../services/diagnosticService';
-import './KnowledgeCheck.css';
+import './KnowledgeCheck-v2.css';
+
+// Component version: v1.0.2 - Updated with new CSS file
 
 const LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -19,8 +21,11 @@ const KnowledgeCheck: React.FC<KnowledgeCheckProps> = ({ onClose }) => {
   // Selected chapter
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   
-  // Quiz questions
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  // Quiz questions (without correct answers initially)
+  const [questions, setQuestions] = useState<FrontendQuizQuestion[]>([]);
+  
+  // Quiz questions with correct answers (only available after submission)
+  const [completeQuestions, setCompleteQuestions] = useState<QuizQuestion[]>([]);
   
   // Current question index
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -92,9 +97,70 @@ const KnowledgeCheck: React.FC<KnowledgeCheckProps> = ({ onClose }) => {
     setSelectedAnswers(newAnswers);
   };
 
-  // Check the selected answer
-  const handleCheckAnswer = () => {
-    setQuestionAnswered(true);
+  // Check the selected answer and provide immediate feedback
+  const handleCheckAnswer = async () => {
+    try {
+      // Get user ID from auth service (mock for now)
+      const userId = '123';
+      
+      // Force-decode and display the correct answers from session storage
+      const storedQuestionsData = sessionStorage.getItem(`quiz_${selectedChapter?.id}`);
+      if (storedQuestionsData) {
+        // Decode the base64 encoded questions
+        let fullQuestions: QuizQuestion[] = [];
+        try {
+          fullQuestions = JSON.parse(atob(storedQuestionsData));
+          console.log("Retrieved questions:", fullQuestions);
+        } catch (e) {
+          console.error("Failed to decode questions:", e);
+          fullQuestions = [];
+        }
+        
+        if (fullQuestions.length > 0) {
+          // Calculate current correct/incorrect
+          let correctCount = 0;
+          const currentCorrectIndex = fullQuestions[currentQuestionIndex]?.correctIndex;
+          
+          // Check if the answer is correct
+          const isCorrect = selectedAnswers[currentQuestionIndex] === currentCorrectIndex;
+          console.log(`Answer checked: ${isCorrect ? 'Correct!' : 'Incorrect'}`);
+          console.log(`Selected: ${selectedAnswers[currentQuestionIndex]}, Correct: ${currentCorrectIndex}`);
+          
+          if (isCorrect) {
+            correctCount++;
+          }
+          
+          // Set quiz results (partial) to enable highlighting
+          setQuizResults({
+            userId,
+            chapterId: selectedChapter?.id || '',
+            correct: correctCount,
+            total: fullQuestions.length,
+            percentage: (correctCount / fullQuestions.length) * 100,
+            userAnswers: selectedAnswers,
+            questions: fullQuestions // Include full questions with correct answers
+          });
+          
+          // Show the explanation
+          console.log("Setting explanation:", fullQuestions[currentQuestionIndex]?.explanation);
+        }
+      } else {
+        console.error("No stored questions found for chapter:", selectedChapter?.id);
+      }
+      
+      // Mark this question as answered
+      setQuestionAnswered(true);
+      
+      // If this is the last question, submit the quiz after a delay
+      if (isLastQuestion) {
+        setTimeout(async () => {
+          await handleSubmitQuiz();
+        }, 1500);
+      }
+    } catch (error) {
+      console.error('Error checking answer:', error);
+      setQuestionAnswered(true);
+    }
   };
 
   // Move to the next question
@@ -118,6 +184,11 @@ const KnowledgeCheck: React.FC<KnowledgeCheckProps> = ({ onClose }) => {
         selectedAnswers,
         questions
       );
+      
+      // Now that the quiz is scored, we can safely store the complete questions with answers
+      if (results.questions) {
+        setCompleteQuestions(results.questions);
+      }
       
       setQuizResults(results);
       setView('results');
@@ -232,55 +303,64 @@ const KnowledgeCheck: React.FC<KnowledgeCheckProps> = ({ onClose }) => {
             <h3>{currentQuestion.question}</h3>
             
             <div className="quiz-options">
-              {currentQuestion.options.map((option, index) => (
-                <div 
-                  key={index}
-                  className={`quiz-option ${selectedAnswers[currentQuestionIndex] === index ? 'selected' : ''} ${
-                    questionAnswered 
-                      ? index === currentQuestion.correctIndex 
-                        ? 'correct' 
-                        : selectedAnswers[currentQuestionIndex] === index 
-                          ? 'incorrect' 
-                          : '' 
-                      : ''
-                  }`}
-                  onClick={() => handleSelectAnswer(index)}
-                >
-                  <div className="option-letter">{LETTERS[index]}</div>
-                  {option}
-                </div>
-              ))}
+              {currentQuestion.options.map((option, index) => {
+                // Determine if this option is correct or incorrect
+                let optionClass = "";
+                
+                if (selectedAnswers[currentQuestionIndex] === index) {
+                  optionClass = "selected";
+                  
+                  if (questionAnswered && quizResults && quizResults.questions) {
+                    const correctIndex = quizResults.questions[currentQuestionIndex]?.correctIndex;
+                    if (correctIndex !== undefined) {
+                      optionClass += index === correctIndex ? " correct" : " incorrect";
+                    }
+                  }
+                } else if (questionAnswered && quizResults && quizResults.questions) {
+                  const correctIndex = quizResults.questions[currentQuestionIndex]?.correctIndex;
+                  if (correctIndex !== undefined && index === correctIndex) {
+                    optionClass += " correct-answer";
+                  }
+                }
+                
+                return (
+                  <div 
+                    key={index}
+                    className={`quiz-option ${optionClass}`}
+                    onClick={() => handleSelectAnswer(index)}
+                  >
+                    <div className="option-letter">{LETTERS[index]}</div>
+                    <div className="option-text">{option}</div>
+                  </div>
+                );
+              })}
             </div>
             
-            {questionAnswered && (
+            {questionAnswered && quizResults && quizResults.questions && quizResults.questions[currentQuestionIndex]?.explanation && (
               <div className="explanation">
-                <strong>Explanation: </strong>
-                {currentQuestion.explanation}
+                <strong>Explanation:</strong>
+                <div>{quizResults.questions[currentQuestionIndex].explanation}</div>
               </div>
             )}
           </div>
           
           <div className="quiz-navigation">
-            <div>
-              {/* Placeholder for back button if needed */}
-            </div>
-            
-            {!questionAnswered ? (
+            {!questionAnswered && !quizResults ? (
               <button 
                 className="quiz-button next"
                 disabled={selectedAnswers[currentQuestionIndex] === -1}
                 onClick={handleCheckAnswer}
               >
-                Check Answer
+                {isLastQuestion ? 'Submit Quiz' : 'Check Answer'} 
               </button>
-            ) : (
+            ) : !isLastQuestion ? (
               <button 
-                className={`quiz-button ${isLastQuestion ? 'submit' : 'next'}`}
-                onClick={isLastQuestion ? handleSubmitQuiz : handleNextQuestion}
+                className="quiz-button next"
+                onClick={handleNextQuestion}
               >
-                {isLastQuestion ? 'Submit Quiz' : 'Next Question'}
+                Next Question
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       )}

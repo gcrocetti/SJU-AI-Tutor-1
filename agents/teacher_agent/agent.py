@@ -30,6 +30,11 @@ from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 # Import shared utilities
 from agents.common.utils import setup_logging, safe_json_loads
 from agents.teacher_agent.prompts import SYSTEM_PROMPT, QUERY_ANALYSIS_PROMPT
+# Import knowledge check evaluation prompts 
+from agents.knowledge_check_agent.prompts import (
+    EVALUATE_RESPONSE_SYSTEM_PROMPT, 
+    EVALUATE_RESPONSE_USER_PROMPT
+)
 from agents.teacher_agent.tools import (
     pinecone_content_retrieval, 
     analyze_content_relevance, 
@@ -129,6 +134,10 @@ class AgentState(TypedDict):
     needs_content: bool
     content_results: List[Dict[str, Any]]
     student_knowledge_state: Dict[str, Any]  # Tracking student progress/knowledge
+    is_knowledge_check: bool  # Whether this is a knowledge check request
+    knowledge_check_topic: Optional[str]  # Topic for knowledge check
+    knowledge_check_prompt: Optional[str]  # Generated prompt for knowledge check
+    knowledge_check_evaluation: Optional[Dict[str, Any]]  # Evaluation results
     final_response: Optional[str]
     error: Optional[str]
 
@@ -483,36 +492,270 @@ def content_retriever(state: AgentState) -> AgentState:
         return new_state
 
 
+def detect_knowledge_check_request(query: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    Detect if a query is requesting a knowledge check and extract the topic.
+    
+    Args:
+        query: The user query to analyze
+        
+    Returns:
+        Tuple of (is_knowledge_check, topic, prompt)
+    """
+    # Keywords that indicate a knowledge check request
+    knowledge_check_keywords = [
+        "check my knowledge", "test my knowledge", "evaluate my knowledge",
+        "assess my understanding", "test my understanding", "quiz me", "test me",
+        "knowledge check", "how well do i understand", "check if i know",
+        "evaluate what i know", "see if i understand", "check my mastery"
+    ]
+    
+    # Check if any knowledge check keyword is in the query
+    is_knowledge_check = any(keyword in query.lower() for keyword in knowledge_check_keywords)
+    
+    if not is_knowledge_check:
+        return (False, None, None)
+    
+    # Try to extract the topic from the query
+    # Common patterns:
+    # - "Check my knowledge on [topic]"
+    # - "Test me on [topic]"
+    # - "Can you evaluate my understanding of [topic]?"
+    
+    # Get the LLM for topic extraction
+    llm = get_llm(temperature=0.1)
+    
+    topic_extraction_prompt = ChatPromptTemplate.from_messages([
+        SystemMessage(content="""
+        You are an expert at extracting specific topics from knowledge check requests.
+        Given a query asking for a knowledge check, identify the specific topic the user wants to be tested on.
+        If no specific topic is mentioned, identify the most likely topic based on recent conversation context if provided.
+        If you can't determine a specific topic, return "general".
+        
+        Return your answer as a JSON object with these fields:
+        - topic: The specific subject or concept to test (e.g., "object-oriented programming", "neural networks")
+        - prompt: A specific knowledge check question about this topic that requires a detailed explanation (not a yes/no or multiple choice)
+        """),
+        HumanMessage(content=f"Query: {query}")
+    ])
+    
+    try:
+        # Extract topic using LLM
+        chain = topic_extraction_prompt | llm | JsonOutputParser()
+        result = chain.invoke({})
+        
+        topic = result.get("topic", "general")
+        prompt = result.get("prompt", f"Please explain your understanding of {topic}.")
+        
+        return (True, topic, prompt)
+    except Exception as e:
+        logger.error(f"Error extracting knowledge check topic: {e}")
+        return (True, "general", "Please explain your understanding of this topic.")
+
 def track_student_knowledge(state: AgentState) -> AgentState:
     """
-    This is a placeholder function that we'll expand in the future with a separate
-    knowledge tracking agent/tool. For now, it just passes through the state.
+    Track student knowledge and detect knowledge check requests.
     
     Args:
         state: Current agent state containing conversation history
         
     Returns:
-        Updated state (unchanged for now)
+        Updated state with knowledge tracking information
     """
-    # Simply pass through the state without any knowledge tracking
-    # This functionality will be implemented in a separate agent in the future
-    
-    # Create minimal knowledge state for compatibility
     new_state = state.copy()
+    
+    # Create basic knowledge state
     new_state["student_knowledge_state"] = {
         "topics": [{"name": "topic", "understanding": 3}],
         "mastery_level": "intermediate",
         "recommended_focus": ["Natural conversation", "Critical thinking"]
     }
     
+    # Set default knowledge check fields
+    new_state["is_knowledge_check"] = False
+    new_state["knowledge_check_topic"] = None
+    new_state["knowledge_check_prompt"] = None
+    new_state["knowledge_check_evaluation"] = None
+    
+    # Check if this is a knowledge check request
+    is_knowledge_check, topic, prompt = detect_knowledge_check_request(state["query"])
+    if is_knowledge_check:
+        logger.info(f"Detected knowledge check request on topic: {topic}")
+        new_state["is_knowledge_check"] = True
+        new_state["knowledge_check_topic"] = topic
+        new_state["knowledge_check_prompt"] = prompt
+    
     return new_state
 
+
+def evaluate_free_response(
+    topic: str,
+    prompt: str,
+    response_text: str,
+    user_id: str = "anonymous"
+) -> Dict[str, Any]:
+    """
+    Evaluate a user's free-text response to a knowledge check.
+    
+    Args:
+        topic: The topic being assessed
+        prompt: The knowledge check prompt
+        response_text: The user's written response
+        user_id: Identifier for the user (email or unique ID)
+        
+    Returns:
+        Dict containing evaluation results
+    """
+    try:
+        # Use the knowledge check agent's evaluation prompts
+        system_prompt = EVALUATE_RESPONSE_SYSTEM_PROMPT.format(
+            topic=topic,
+            prompt=prompt
+        )
+        
+        user_prompt = EVALUATE_RESPONSE_USER_PROMPT.format(
+            prompt=prompt,
+            response=response_text
+        )
+        
+        # Get the LLM for evaluation (lower temperature for consistent evaluations)
+        llm = get_llm(temperature=0.3)
+        
+        # Create the evaluation prompt
+        evaluation_prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
+        
+        # Generate the evaluation
+        chain = evaluation_prompt | llm | JsonOutputParser()
+        evaluation = chain.invoke({})
+        
+        # Store the evaluation in DynamoDB (future implementation)
+        from datetime import datetime
+        
+        storage_data = {
+            "userId": user_id,
+            "topic": topic,
+            "timestamp": datetime.now().isoformat(),
+            "prompt": prompt,
+            "response": response_text[:500],  # Store truncated response
+            "scores": evaluation.get("scores", {}),
+            "totalScore": evaluation.get("totalScore", 0),
+            "feedback": evaluation.get("feedback", "")
+        }
+        
+        logger.info(f"Knowledge check completed for user {user_id} on topic {topic}, score: {evaluation.get('totalScore', 0)}")
+        
+        return {
+            'success': True,
+            'data': evaluation
+        }
+    except Exception as e:
+        logger.error(f"Error evaluating response: {e}")
+        
+        # Return a fallback evaluation
+        fallback_evaluation = {
+            "scores": {
+                "accuracy": 2,
+                "depth": 2,
+                "clarity": 1,
+                "application": 1
+            },
+            "totalScore": 6,
+            "feedback": "I had trouble generating a detailed evaluation. Your response shows some understanding of the topic."
+        }
+        
+        return {
+            'success': False,
+            'data': fallback_evaluation,
+            'message': f'Error evaluating response: {str(e)}'
+        }
+
+def process_knowledge_check_response(
+    topic: str,
+    prompt: str,
+    response_text: str,
+    user_id: str = "anonymous"
+) -> Dict[str, Any]:
+    """
+    Process a student's response to a knowledge check.
+    
+    Args:
+        topic: The topic being assessed
+        prompt: The original knowledge check prompt
+        response_text: The student's answer
+        user_id: The user's identifier
+        
+    Returns:
+        Dict containing the evaluation and response message
+    """
+    # Evaluate the response
+    evaluation_result = evaluate_free_response(topic, prompt, response_text, user_id)
+    evaluation = evaluation_result.get('data', {})
+    
+    # Create a detailed feedback message
+    feedback_template = f"""
+    Topic: {topic}
+    
+    I've evaluated your response based on:
+    - Accuracy (3 points): Correctness of technical information
+    - Depth (3 points): Demonstration of deep understanding vs. surface knowledge
+    - Clarity (2 points): Clear organization and explanation of concepts
+    - Application (2 points): Ability to apply concepts to problems or scenarios
+    
+    OVERALL SCORE: {evaluation.get('totalScore', 0)}/10
+    
+    DETAILED BREAKDOWN:
+    - Accuracy: {evaluation.get('scores', {}).get('accuracy', 0)}/3
+    - Depth: {evaluation.get('scores', {}).get('depth', 0)}/3
+    - Clarity: {evaluation.get('scores', {}).get('clarity', 0)}/2
+    - Application: {evaluation.get('scores', {}).get('application', 0)}/2
+    
+    FEEDBACK:
+    {evaluation.get('feedback', 'Your response shows some understanding of the topic.')}
+    
+    Would you like to dive deeper into any specific aspect of this topic?
+    """
+    
+    # Get the LLM for generating a more natural response
+    llm = get_llm(temperature=0.7)
+    
+    # Create a prompt for generating a natural, educational response
+    response_prompt = ChatPromptTemplate.from_messages([
+        SystemMessage(content="""You are an expert educational assessment provider. 
+        Your goal is to provide constructive, detailed feedback on a student's knowledge check.
+        Be encouraging but honest, and always offer specific ways to improve."""),
+        HumanMessage(content=feedback_template)
+    ])
+    
+    try:
+        # Generate the response
+        chain = response_prompt | llm | StrOutputParser()
+        final_response = chain.invoke({})
+        
+        return {
+            "response": final_response,
+            "evaluation": evaluation,
+            "topic": topic,
+            "success": evaluation_result.get('success', False)
+        }
+    except Exception as e:
+        logger.error(f"Error generating feedback response: {e}")
+        return {
+            "response": feedback_template.strip(),
+            "evaluation": evaluation,
+            "topic": topic,
+            "success": False,
+            "error": str(e)
+        }
 
 def response_generator(state: AgentState) -> AgentState:
     """
     Generate a response based on retrieved content and conversation history.
     Focuses on natural conversation and critical thinking.
     Special handling for syllabus-related queries with detailed document references.
+    Special handling for knowledge check requests with evaluation prompts.
     
     Args:
         state: Current agent state containing content
@@ -526,6 +769,9 @@ def response_generator(state: AgentState) -> AgentState:
     is_syllabus_overview = state.get("is_syllabus_overview", False)
     is_specific_syllabus = state.get("is_specific_syllabus", False)
     is_follow_up_reference = state.get("is_follow_up_reference", False)
+    is_knowledge_check = state.get("is_knowledge_check", False)
+    knowledge_check_topic = state.get("knowledge_check_topic", None)
+    knowledge_check_prompt = state.get("knowledge_check_prompt", None)
     referenced_topic = state.get("referenced_topic", None)
     matched_topics = state.get("matched_syllabus_topics", [])
     primary_topic = state.get("primary_topic", None)
@@ -671,7 +917,27 @@ def response_generator(state: AgentState) -> AgentState:
     questions_context = "\n".join([f"- {q}" for q in probing_questions])
     
     # Create appropriate response prompt based on query type
-    if is_syllabus_overview:
+    if is_knowledge_check:
+        # For knowledge check requests, generate a specialized prompt
+        response_template = f"""
+User has requested a knowledge check on: {knowledge_check_topic}
+
+You should create a free-response knowledge assessment. This is NOT a multiple-choice quiz.
+
+Please respond with:
+1. A formal acknowledgment that you'll be evaluating their knowledge
+2. A clear, specific prompt that asks them to explain their understanding of {knowledge_check_topic}
+3. Instructions that their response should be comprehensive and demonstrate both factual knowledge and conceptual understanding
+4. Explanation that you'll evaluate their response based on accuracy, depth, clarity, and practical application
+5. The specific prompt: "{knowledge_check_prompt}"
+
+Format the knowledge check as a special message that stands out visually.
+Make it clear the student should take this as a formal assessment opportunity.
+Do NOT provide any answers or hints - this is purely an assessment.
+
+This is the FIRST step of a two-part interaction - you will evaluate their response in a follow-up message.
+"""
+    elif is_syllabus_overview:
         response_template = f"""
 {content_context}
 
@@ -882,7 +1148,7 @@ def create_agent_graph() -> StateGraph:
     return workflow.compile()
 
 
-def process_query(query: str, session_id: str, message_history: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def process_query(query: str, session_id: str, message_history: Optional[List[Dict[str, Any]]] = None, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Process a user query through the agent workflow.
     
@@ -890,6 +1156,7 @@ def process_query(query: str, session_id: str, message_history: Optional[List[Di
         query: The user's question
         session_id: Unique identifier for the conversation session
         message_history: Previous messages in the conversation
+        metadata: Additional metadata, including knowledge check responses
         
     Returns:
         Dict containing the agent's response and updated conversation history
@@ -898,6 +1165,55 @@ def process_query(query: str, session_id: str, message_history: Optional[List[Di
     if message_history is None:
         message_history = []
     
+    # Initialize metadata if not provided
+    if metadata is None:
+        metadata = {}
+    
+    # Check if this is a response to a knowledge check
+    knowledge_check_response = metadata.get('knowledge_check_response', False)
+    
+    if knowledge_check_response:
+        # Process this as a knowledge check response
+        topic = metadata.get('topic', 'general')
+        prompt = metadata.get('prompt', 'Explain your understanding of this topic.')
+        response_text = query
+        user_id = metadata.get('user_id', 'anonymous')
+        
+        logger.info(f"Processing knowledge check response for topic: {topic}")
+        
+        # Use the specialized function for knowledge check responses
+        result = process_knowledge_check_response(topic, prompt, response_text, user_id)
+        
+        # Format the response for the frontend
+        evaluation = result.get('evaluation', {})
+        
+        # Add the response to message history
+        message_history.append({
+            "role": "user", 
+            "content": query,
+            "metadata": {
+                "knowledge_check_response": True,
+                "topic": topic
+            }
+        })
+        
+        message_history.append({
+            "role": "assistant", 
+            "content": result.get('response', ''),
+            "metadata": {
+                "knowledge_check_evaluation": evaluation
+            }
+        })
+        
+        return {
+            "response": result.get('response', ''),
+            "message_history": message_history,
+            "knowledge_check_evaluation": evaluation,
+            "success": result.get('success', False),
+            "error": result.get('error')
+        }
+    
+    # Regular query processing flow
     # Add the current query to message history
     message_history.append({"role": "user", "content": query})
     
@@ -909,6 +1225,10 @@ def process_query(query: str, session_id: str, message_history: Optional[List[Di
         "needs_content": False,
         "content_results": [],
         "student_knowledge_state": {},  # Will be populated during analysis
+        "is_knowledge_check": False,
+        "knowledge_check_topic": None,
+        "knowledge_check_prompt": None,
+        "knowledge_check_evaluation": None,
         "final_response": None,
         "error": None
     }
@@ -927,11 +1247,24 @@ def process_query(query: str, session_id: str, message_history: Optional[List[Di
         # Add the response to message history
         message_history.append({"role": "assistant", "content": response})
         
+        # Check if this was a knowledge check request
+        is_knowledge_check = final_state.get("is_knowledge_check", False)
+        knowledge_check_data = None
+        
+        if is_knowledge_check:
+            knowledge_check_data = {
+                "topic": final_state.get("knowledge_check_topic", "general"),
+                "prompt": final_state.get("knowledge_check_prompt", ""),
+                "awaiting_response": True,
+                "type": "free-response"
+            }
+            
         # Return result with enriched data for frontend
         return {
             "response": response,
             "message_history": message_history,
             "knowledge_state": knowledge_state,  # Include knowledge state for frontend visualization
+            "knowledge_check": knowledge_check_data,  # Include knowledge check data if applicable
             "error": final_state.get("error")
         }
         
@@ -972,6 +1305,7 @@ def lambda_handler(event, context):
         query = body.get('query', '')
         session_id = body.get('session_id', '')
         message_history = body.get('message_history', [])
+        metadata = body.get('metadata', {})
         
         # Generate a session ID if not provided
         if not session_id:
@@ -986,7 +1320,7 @@ def lambda_handler(event, context):
             }
         
         # Process the query
-        result = process_query(query, session_id, message_history)
+        result = process_query(query, session_id, message_history, metadata)
         
         # Add session ID to response
         result['session_id'] = session_id
