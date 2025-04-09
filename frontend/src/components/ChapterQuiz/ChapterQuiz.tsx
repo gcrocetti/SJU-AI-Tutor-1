@@ -68,8 +68,50 @@ const ChapterQuiz: React.FC = () => {
     setSelectedAnswers(newAnswers);
   };
 
-  // Check if the selected answer is correct
+  // Check if the selected answer is correct and show the explanation
   const handleCheckAnswer = () => {
+    // Log for debugging
+    console.log("Checking answer...");
+    console.log("Current question:", currentQuestion);
+    console.log("Selected answer:", selectedAnswers[currentQuestionIndex]);
+    
+    try {
+      // Get the full question data from session storage
+      const storedQuestionsData = sessionStorage.getItem(`quiz_${chapterId}`);
+      if (storedQuestionsData) {
+        // Decode stored questions (which include correct answers)
+        const fullQuestions = JSON.parse(atob(storedQuestionsData));
+        console.log("Full questions from storage:", fullQuestions);
+        
+        // Get the correct answer for the current question
+        if (fullQuestions && fullQuestions.length > currentQuestionIndex) {
+          const fullCurrentQuestion = fullQuestions[currentQuestionIndex];
+          
+          // Explicitly add the correctIndex to our current question object
+          if (currentQuestion && fullCurrentQuestion.correctIndex !== undefined) {
+            // This is a hack to add the correct index to the current question
+            // Using type assertion to bypass TypeScript's readonly checks
+            (currentQuestion as any).correctIndex = fullCurrentQuestion.correctIndex;
+            (currentQuestion as any).explanation = fullCurrentQuestion.explanation;
+            
+            console.log("Added correctIndex to current question:", currentQuestion);
+            console.log("Correct index:", (currentQuestion as any).correctIndex);
+            console.log("User selected:", selectedAnswers[currentQuestionIndex]);
+            
+            // Force a re-render by updating state
+            setQuestions([...questions]);
+          } else {
+            console.error("Could not find correct index in stored question data");
+          }
+        }
+      } else {
+        console.error("No stored question data found");
+      }
+    } catch (error) {
+      console.error("Error retrieving correct answer:", error);
+    }
+    
+    // Show explanation and highlight answers
     setQuestionAnswered(true);
   };
 
@@ -257,26 +299,42 @@ const ChapterQuiz: React.FC = () => {
               <div 
                 key={index}
                 className={`quiz-option ${selectedAnswers[currentQuestionIndex] === index ? 'selected' : ''} ${
+                  // When question is answered, apply the appropriate class:
                   questionAnswered 
-                    ? index === currentQuestion.correctIndex 
-                      ? 'correct' 
-                      : selectedAnswers[currentQuestionIndex] === index 
-                        ? 'incorrect' 
-                        : '' 
+                    ? (
+                      // Safety check to avoid errors if correctIndex is not available
+                      currentQuestion && currentQuestion.correctIndex !== undefined
+                        ? (
+                          // If this is the correct answer, mark it as correct
+                          index === currentQuestion.correctIndex 
+                            ? 'correct' 
+                            // If this was selected but is wrong, mark as incorrect
+                            : selectedAnswers[currentQuestionIndex] === index 
+                              ? 'incorrect' 
+                              : ''
+                          )
+                        : '' // No styling if correctIndex is not available
+                      ) 
                     : ''
                 }`}
                 onClick={() => handleSelectAnswer(index)}
               >
                 <div className="option-letter">{LETTERS[index]}</div>
-                <div>{option}</div>
+                <div className="option-text">{option}</div>
               </div>
             ))}
           </div>
           
           {questionAnswered && (
             <div className="explanation">
-              <strong>Explanation: </strong>
-              {currentQuestion.explanation}
+              <strong>Explanation:</strong>
+              <div className="explanation-text">
+                {currentQuestion && 
+                 currentQuestion.explanation && 
+                 typeof currentQuestion.explanation === 'string' 
+                  ? currentQuestion.explanation 
+                  : "No explanation available for this question. Please check your answer against the highlighted correct option."}
+              </div>
             </div>
           )}
           

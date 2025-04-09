@@ -11,7 +11,8 @@ import {
   QuizQuestion,
   QuizResult,
   Chapter,
-  TextEvaluation
+  TextEvaluation,
+  FrontendQuizQuestion
 } from '../types';
 import authService from './authService';
 
@@ -343,7 +344,7 @@ export class DiagnosticsService {
    * @param userId - The user ID to get chapters for
    * @returns Array of Chapter objects
    */
-  private getDefaultChapters(userId: string): Chapter[] {
+  private getDefaultChapters(_userId: string): Chapter[] {
     // This would be replaced with real data in a production implementation
     return [
       { id: 'chapter-1', title: 'Introduction to Computer Science and Programming', description: 'Fundamentals of programming, algorithms, and computer systems.', bestScore: 90, attempts: 2 },
@@ -364,9 +365,9 @@ export class DiagnosticsService {
    * 
    * @param chapterId - The chapter ID to generate questions for
    * @param numQuestions - Number of questions to generate (default: 10)
-   * @returns Promise resolving to array of QuizQuestions
+   * @returns Promise resolving to array of FrontendQuizQuestion (without correct answers)
    */
-  async generateQuizQuestions(chapterId: string, numQuestions: number = 10): Promise<QuizQuestion[]> {
+  async generateQuizQuestions(chapterId: string, numQuestions: number = 10): Promise<{ id: string; question: string; options: string[] }[]> {
     try {
       console.log(`Generating ${numQuestions} questions for chapter ${chapterId}`);
       
@@ -394,16 +395,76 @@ export class DiagnosticsService {
         
         // Check if we have data in the response
         if (result.data && result.data.questions) {
-          return result.data.questions;
+          // Store the full questions with answers in session storage
+          // Log the questions for debugging
+          console.log("Storing quiz questions:", result.data.questions);
+          
+          // Randomize option positions before storing
+          const randomizedQuestions = this.randomizeOptionPositions(result.data.questions);
+          console.log("Questions after randomization:", randomizedQuestions);
+          
+          // Store in session storage (base64 encoded for minimal obfuscation)
+          const encodedData = btoa(JSON.stringify(randomizedQuestions));
+          sessionStorage.setItem(`quiz_${chapterId}`, encodedData);
+          
+          // Verify storage worked by reading it back (debug only)
+          try {
+            const storedData = sessionStorage.getItem(`quiz_${chapterId}`);
+            if (storedData) {
+              const decodedData = JSON.parse(atob(storedData));
+              console.log("Retrieved stored questions successfully:", decodedData);
+            }
+          } catch (e) {
+            console.error("Failed to verify stored questions:", e);
+          }
+          
+          // Return only the question text and options to the frontend (no correct answers)
+          return randomizedQuestions.map((q: QuizQuestion, index: number): FrontendQuizQuestion => ({
+            id: `${chapterId}_q${index}`,
+            question: q.question,
+            options: q.options
+          }));
         } else {
           // Fallback to mock data in case of issues
           console.warn('No questions data in response, using mock data');
-          return this.getMockQuestions(chapterId);
+          const mockQuestions = this.getMockQuestions(chapterId);
+          
+          // Randomize option positions for mock questions
+          const randomizedMockQuestions = this.randomizeOptionPositions(mockQuestions);
+          console.log("Mock questions after randomization:", randomizedMockQuestions);
+          
+          // Store the randomized mock questions
+          const encodedMockData = btoa(JSON.stringify(randomizedMockQuestions));
+          sessionStorage.setItem(`quiz_${chapterId}`, encodedMockData);
+          
+          // Return frontend-safe version of randomized mock questions
+          return randomizedMockQuestions.map((q, index): FrontendQuizQuestion => ({
+            id: `${chapterId}_q${index}`,
+            question: q.question,
+            options: q.options
+          }));
         }
       } catch (apiError) {
         console.error('API error:', apiError);
         console.warn('Using mock data due to API error');
-        return this.getMockQuestions(chapterId);
+        const mockQuestions = this.getMockQuestions(chapterId);
+        
+        // Randomize option positions for mock questions
+        const randomizedMockQuestions = this.randomizeOptionPositions(mockQuestions);
+        console.log("Mock questions after randomization (error case):", randomizedMockQuestions);
+        
+        // Store the randomized mock questions
+        sessionStorage.setItem(
+          `quiz_${chapterId}`, 
+          btoa(JSON.stringify(randomizedMockQuestions))
+        );
+        
+        // Return frontend-safe version of randomized questions
+        return randomizedMockQuestions.map((q, index): FrontendQuizQuestion => ({
+          id: `${chapterId}_q${index}`,
+          question: q.question,
+          options: q.options
+        }));
       }
     } catch (error) {
       console.error('Failed to generate quiz questions', error);
@@ -417,18 +478,29 @@ export class DiagnosticsService {
    * @param userId - User ID
    * @param chapterId - Chapter ID
    * @param answers - Array of answer indices selected by the user
-   * @param questions - Array of quiz questions with correct answers
+   * @param frontendQuestions - Array of frontend quiz questions (without correct answers)
    * @returns Promise resolving to QuizResult
    */
   async scoreQuiz(
     userId: string,
     chapterId: string,
     answers: number[],
-    questions: QuizQuestion[]
+    _frontendQuestions: { id: string; question: string; options: string[] }[]
   ): Promise<QuizResult> {
     try {
       console.log(`Scoring quiz for user ${userId}, chapter ${chapterId}`);
       
+      // Retrieve the original questions with correct answers from session storage
+      const storedQuestionsData = sessionStorage.getItem(`quiz_${chapterId}`);
+      
+      if (!storedQuestionsData) {
+        throw new Error("Cannot find original quiz data. Please restart the quiz.");
+      }
+      
+      // Decode and parse the stored questions
+      const questions: QuizQuestion[] = JSON.parse(atob(storedQuestionsData));
+      
+      // Create the query for the API with the FULL questions (including correct answers)
       const query = JSON.stringify({
         message: JSON.stringify({
           action: 'score_quiz',
@@ -455,7 +527,8 @@ export class DiagnosticsService {
         
         // Check if we have data in the response
         if (result.data && result.data.quiz_result) {
-          return {
+          // Also save the questions with correct answers for review
+          const quizResults = {
             userId,
             chapterId,
             correct: result.data.quiz_result.correct,
@@ -463,8 +536,12 @@ export class DiagnosticsService {
             percentage: result.data.quiz_result.percentage,
             userAnswers: answers,
             bestScores: result.data.quiz_result.best_scores || {},
-            attemptCounts: result.data.quiz_result.attempt_counts || {}
+            attemptCounts: result.data.quiz_result.attempt_counts || {},
+            questions: questions // Now we can include the full questions with correct answers
           };
+          
+          // The quiz is complete, so it's now safe to share the correct answers
+          return quizResults;
         } else {
           // Fallback to local scoring if API doesn't return proper data
           console.warn('No quiz result data in response, scoring locally');
@@ -507,6 +584,16 @@ export class DiagnosticsService {
     
     const percentage = (correct / total) * 100;
     
+    // Get current best score for this chapter
+    const currentBestScore = this.getMockBestScore(chapterId);
+    
+    // Calculate new best score (if this attempt is better)
+    const newBestScore = Math.max(percentage, currentBestScore);
+    
+    // Get current attempt count and increment by 1 for this attempt
+    const currentAttemptCount = this.getMockAttemptCount(chapterId);
+    const newAttemptCount = currentAttemptCount + 1;
+    
     return {
       userId,
       chapterId,
@@ -515,17 +602,32 @@ export class DiagnosticsService {
       percentage,
       userAnswers: answers,
       bestScores: {
-        'chapter-1': 90,
-        'chapter-2': 75,
-        'chapter-3': 80,
-        [chapterId]: Math.max(percentage, this.getMockBestScore(chapterId))
+        'chapter-1': 0,
+        'chapter-2': 0,
+        'chapter-3': 0,
+        'chapter-4': 0,
+        'chapter-5': 0,
+        'chapter-6': 0,
+        'chapter-7': 0,
+        'chapter-8': 0,
+        'chapter-9': 0,
+        'chapter-10': 0,
+        [chapterId]: newBestScore // The new best score for this chapter
       },
       attemptCounts: {
-        'chapter-1': 2,
-        'chapter-2': 1,
-        'chapter-3': 1,
-        [chapterId]: this.getMockAttemptCount(chapterId) + 1
-      }
+        'chapter-1': 0,
+        'chapter-2': 0,
+        'chapter-3': 0,
+        'chapter-4': 0,
+        'chapter-5': 0,
+        'chapter-6': 0,
+        'chapter-7': 0,
+        'chapter-8': 0,
+        'chapter-9': 0,
+        'chapter-10': 0,
+        [chapterId]: newAttemptCount // Incremented attempt count
+      },
+      questions: questions // Include the full questions with correct answers for review
     };
   }
   
@@ -541,8 +643,8 @@ export class DiagnosticsService {
   async evaluateTextResponse(
     userId: string,
     topic: string,
-    prompt: string,
-    response: string
+    _prompt: string,
+    _response: string
   ): Promise<TextEvaluation> {
     try {
       console.log(`Evaluating text response for user ${userId}, topic ${topic}`);
@@ -575,10 +677,11 @@ export class DiagnosticsService {
   // Helper methods for mock data
   
   private getMockBestScore(chapterId: string): number {
+    // Set all initial best scores to 0 for all chapters
     const scores: Record<string, number> = {
-      'chapter-1': 90,
-      'chapter-2': 75,
-      'chapter-3': 80,
+      'chapter-1': 0,
+      'chapter-2': 0,
+      'chapter-3': 0,
       'chapter-4': 0,
       'chapter-5': 0,
       'chapter-6': 0,
@@ -592,10 +695,11 @@ export class DiagnosticsService {
   }
   
   private getMockAttemptCount(chapterId: string): number {
+    // Set all initial attempt counts to 0 for all chapters
     const counts: Record<string, number> = {
-      'chapter-1': 2,
-      'chapter-2': 1,
-      'chapter-3': 1,
+      'chapter-1': 0,
+      'chapter-2': 0,
+      'chapter-3': 0,
       'chapter-4': 0,
       'chapter-5': 0,
       'chapter-6': 0,
@@ -610,158 +714,525 @@ export class DiagnosticsService {
   
   private getMockQuestions(chapterId: string): QuizQuestion[] {
     // Generate 10 mock questions based on the chapter
-    let topic = '';
+    let questions: QuizQuestion[] = [];
     
     switch (chapterId) {
-      case 'chapter-1':
-        topic = 'Introduction to Computer Science';
+      case 'chapter-1': // Introduction to Computer Science
+        questions = [
+          {
+            question: "Which of the following best describes an algorithm?",
+            options: [
+              "A step-by-step procedure for solving a problem",
+              "A programming language created by Al Gore",
+              "A hardware component that processes computations",
+              "A type of mathematical equation"
+            ],
+            correctIndex: 0,
+            explanation: "An algorithm is a well-defined, step-by-step procedure for solving a problem or accomplishing a task. Algorithms are fundamental to computer science as they define the logical sequence of operations needed to process data and produce desired outputs."
+          },
+          {
+            question: "In computational thinking, what is decomposition?",
+            options: [
+              "Breaking down complex problems into smaller, more manageable parts",
+              "The process of a computer shutting down",
+              "Converting decimal numbers to binary",
+              "Analyzing how quickly a program runs"
+            ],
+            correctIndex: 0,
+            explanation: "Decomposition is the process of breaking down complex problems into smaller, more manageable parts. This is a key computational thinking skill that helps programmers tackle difficult problems by solving smaller sub-problems first."
+          },
+          {
+            question: "What is the primary purpose of pseudocode?",
+            options: [
+              "To describe algorithms in a language-independent way",
+              "To compile and execute programs faster",
+              "To encrypt sensitive data in a program",
+              "To document bugs in existing code"
+            ],
+            correctIndex: 0,
+            explanation: "Pseudocode is used to describe algorithms in a language-independent way, allowing programmers to plan and communicate their logic without worrying about specific programming language syntax. It serves as a blueprint before actual coding begins."
+          },
+          {
+            question: "Which of these is NOT a basic data type in most programming languages?",
+            options: [
+              "Database",
+              "Integer",
+              "Boolean",
+              "String"
+            ],
+            correctIndex: 0,
+            explanation: "Database is not a basic data type but rather a structured system for storing, managing, and retrieving data. The other options (Integer, Boolean, and String) are fundamental data types found in most programming languages."
+          },
+          {
+            question: "Which control structure executes a block of code only if a specified condition is true?",
+            options: [
+              "Conditional statement (if-then-else)",
+              "Loop statement (for, while)",
+              "Function call",
+              "Try-catch block"
+            ],
+            correctIndex: 0,
+            explanation: "Conditional statements like if-then-else execute a block of code only when a specified condition evaluates to true. This allows programs to make decisions based on different conditions and execute different paths accordingly."
+          },
+          {
+            question: "What is the binary representation of the decimal number 10?",
+            options: [
+              "1010",
+              "1100",
+              "1110",
+              "1001"
+            ],
+            correctIndex: 0,
+            explanation: "The decimal number 10 is represented as 1010 in binary. This conversion works by: 10 = 8 + 2 = 2^3 + 2^1 = 1010 in binary, where each 1 represents a power of 2 (reading right to left: 2^1 and 2^3)."
+          },
+          {
+            question: "What is the main difference between compiled and interpreted programming languages?",
+            options: [
+              "Compiled languages translate all code to machine code before execution, while interpreted languages translate code line-by-line during execution",
+              "Compiled languages are always faster than interpreted languages",
+              "Interpreted languages always produce more efficient code",
+              "Compiled languages are newer than interpreted languages"
+            ],
+            correctIndex: 0,
+            explanation: "Compiled languages translate the entire source code to machine code before execution, creating an executable file, while interpreted languages translate and execute code line-by-line during runtime. This fundamental difference affects performance, portability, and debugging."
+          },
+          {
+            question: "In programming, what is the purpose of a variable?",
+            options: [
+              "To store data values that can be used and modified throughout a program",
+              "To vary the speed at which the program executes",
+              "To create visual elements in a user interface",
+              "To establish network connections between computers"
+            ],
+            correctIndex: 0,
+            explanation: "Variables are named storage locations that hold data values which can be used and modified throughout a program. They allow programmers to work with data dynamically, storing and manipulating values during program execution."
+          },
+          {
+            question: "Which of the following is an example of an infinite loop?",
+            options: [
+              "while (true) { // code block }",
+              "for (int i = 0; i < 10; i++) { // code block }",
+              "if (x > 5) { // code block }",
+              "switch (value) { case 1: // code block }"
+            ],
+            correctIndex: 0,
+            explanation: "The 'while (true)' statement creates an infinite loop because the condition always evaluates to true, causing the code block to execute repeatedly without termination. Infinite loops can cause programs to become unresponsive and typically need to be manually interrupted."
+          },
+          {
+            question: "What does the acronym 'IDE' stand for in programming?",
+            options: [
+              "Integrated Development Environment",
+              "Interactive Design Elements",
+              "Internal Development Engine",
+              "Indexed Data Exchange"
+            ],
+            correctIndex: 0,
+            explanation: "IDE stands for Integrated Development Environment. IDEs like Visual Studio Code, Eclipse, and IntelliJ provide comprehensive tools for software development including code editors, debuggers, and build automation tools, making the development process more efficient."
+          }
+        ];
         break;
-      case 'chapter-2':
-        topic = 'Data Structures';
+      case 'chapter-2': // Data Structures
+        questions = [
+          {
+            question: "Which data structure operates on a Last-In-First-Out (LIFO) principle?",
+            options: [
+              "Stack",
+              "Queue",
+              "Linked List",
+              "Binary Tree"
+            ],
+            correctIndex: 0,
+            explanation: "A stack operates on the Last-In-First-Out (LIFO) principle, meaning the last element added is the first one to be removed. This is analogous to a stack of plates where you add and remove plates from the top. Common operations are push (add to top) and pop (remove from top)."
+          },
+          {
+            question: "What is the time complexity of searching for an element in an unsorted array?",
+            options: [
+              "O(n)",
+              "O(1)",
+              "O(log n)",
+              "O(n²)"
+            ],
+            correctIndex: 0,
+            explanation: "Searching for an element in an unsorted array has a time complexity of O(n) because in the worst case, you might need to examine every element in the array before finding the target element or determining it doesn't exist."
+          },
+          {
+            question: "Which of the following best describes a linked list?",
+            options: [
+              "A sequential collection of elements where each element points to the next element",
+              "A collection of elements organized in rows and columns",
+              "A collection of elements where each element has a unique key",
+              "A collection of elements that follows the LIFO principle"
+            ],
+            correctIndex: 0,
+            explanation: "A linked list is a sequential collection of elements called nodes, where each node contains data and a reference (or pointer) to the next node in the sequence. This structure allows for efficient insertion and deletion operations at any position."
+          },
+          {
+            question: "What is the best-case time complexity of quicksort?",
+            options: [
+              "O(n log n)",
+              "O(n)",
+              "O(log n)",
+              "O(n²)"
+            ],
+            correctIndex: 0,
+            explanation: "The best-case time complexity of quicksort is O(n log n), which occurs when the pivot chosen at each step divides the array into roughly equal halves. This creates a balanced recursion tree with a height of log n, and at each level, we do O(n) work partitioning the array."
+          },
+          {
+            question: "Which data structure would be most efficient for implementing a dictionary where keys are mapped to values?",
+            options: [
+              "Hash Table",
+              "Array",
+              "Linked List",
+              "Stack"
+            ],
+            correctIndex: 0,
+            explanation: "A Hash Table is most efficient for implementing a dictionary because it provides average-case O(1) time complexity for insertions, deletions, and lookups. Hash tables map keys to values using a hash function that converts keys into array indices."
+          },
+          {
+            question: "What is the primary advantage of using a binary search over a linear search?",
+            options: [
+              "It has a better time complexity for sorted data",
+              "It works on unsorted data",
+              "It uses less memory",
+              "It is easier to implement"
+            ],
+            correctIndex: 0,
+            explanation: "The primary advantage of binary search is its superior time complexity of O(log n) compared to linear search's O(n). Binary search repeatedly divides the search space in half, making it much more efficient for large datasets, but it requires that the data be sorted first."
+          },
+          {
+            question: "In Big O notation, what does O(1) represent?",
+            options: [
+              "Constant time complexity",
+              "Linear time complexity",
+              "Logarithmic time complexity",
+              "Quadratic time complexity"
+            ],
+            correctIndex: 0,
+            explanation: "O(1) represents constant time complexity, meaning the operation takes the same amount of time regardless of the input size. Examples include accessing an array element by index or inserting an element at the beginning of a linked list."
+          },
+          {
+            question: "Which of the following data structures is most appropriate for implementing a breadth-first search algorithm?",
+            options: [
+              "Queue",
+              "Stack",
+              "Hash Table",
+              "Heap"
+            ],
+            correctIndex: 0,
+            explanation: "A Queue is most appropriate for implementing breadth-first search (BFS) because BFS explores all neighbors at the current depth before moving to nodes at the next depth level. The First-In-First-Out (FIFO) nature of queues naturally supports this level-by-level traversal."
+          },
+          {
+            question: "What is a balanced binary search tree?",
+            options: [
+              "A tree where the height difference between left and right subtrees is minimal",
+              "A tree with an equal number of nodes in all subtrees",
+              "A tree where all leaf nodes are at the same level",
+              "A tree with exactly the same structure on both sides"
+            ],
+            correctIndex: 0,
+            explanation: "A balanced binary search tree is one where the height difference between the left and right subtrees of any node is kept minimal (typically defined by a specific balance factor). This balancing ensures operations like search, insert, and delete maintain logarithmic time complexity."
+          },
+          {
+            question: "Which sorting algorithm has the same time complexity in best, average, and worst cases?",
+            options: [
+              "Merge Sort",
+              "Quick Sort",
+              "Bubble Sort",
+              "Insertion Sort"
+            ],
+            correctIndex: 0,
+            explanation: "Merge Sort has the same time complexity of O(n log n) in all cases (best, average, and worst). This consistency makes it reliable for sorting large datasets when the distribution of input is unknown, unlike Quick Sort which can degrade to O(n²) in worst cases."
+          }
+        ];
         break;
-      case 'chapter-3':
-        topic = 'Object-Oriented Programming';
+      case 'chapter-3': // Object-Oriented Programming
+        questions = [
+          {
+            question: "Which of the following best describes encapsulation in OOP?",
+            options: [
+              "Bundling data and methods that operate on the data within a single unit",
+              "Creating new classes from existing ones",
+              "Having multiple implementations of the same method",
+              "Hiding all data from outside users"
+            ],
+            correctIndex: 0,
+            explanation: "Encapsulation in object-oriented programming refers to bundling data (attributes) and the methods that operate on that data within a single unit (class). It includes the concept of data hiding, where implementation details are hidden and access is restricted to preserve the integrity of the data."
+          },
+          {
+            question: "What is inheritance in OOP?",
+            options: [
+              "A mechanism where a new class acquires properties and behaviors of an existing class",
+              "The process of hiding implementation details",
+              "The ability of an object to take many forms",
+              "A technique for storing data in memory"
+            ],
+            correctIndex: 0,
+            explanation: "Inheritance is a mechanism where a new class (subclass/derived class) acquires properties and behaviors of an existing class (superclass/base class). It promotes code reuse, establishes an 'is-a' relationship, and allows for hierarchical classification of objects."
+          },
+          {
+            question: "What is polymorphism in object-oriented programming?",
+            options: [
+              "The ability of objects to take different forms or exhibit different behaviors based on context",
+              "The process of creating multiple instances of the same class",
+              "The technique of hiding object data from external access",
+              "The practice of defining classes that inherit from multiple parent classes"
+            ],
+            correctIndex: 0,
+            explanation: "Polymorphism is the ability of objects to take different forms or exhibit different behaviors based on context. In practical terms, it allows objects of different classes to be treated as objects of a common superclass, and method calls to be resolved at runtime rather than compile time."
+          },
+          {
+            question: "What is a constructor in OOP?",
+            options: [
+              "A special method that initializes a newly created object",
+              "A method that destroys objects when they are no longer needed",
+              "A method that copies one object to another",
+              "A special variable that contains object data"
+            ],
+            correctIndex: 0,
+            explanation: "A constructor is a special method that is automatically called when an object is created from a class. Its primary purpose is to initialize the newly created object, setting initial values for attributes and performing any setup operations the object requires."
+          },
+          {
+            question: "Which of the following is NOT one of the four main principles of OOP?",
+            options: [
+              "Multithreading",
+              "Encapsulation",
+              "Inheritance",
+              "Polymorphism"
+            ],
+            correctIndex: 0,
+            explanation: "Multithreading is not one of the four main principles of OOP. The four core principles are Encapsulation (bundling data and methods), Inheritance (acquiring properties from existing classes), Polymorphism (multiple forms), and Abstraction (simplifying complex reality by modeling classes)."
+          },
+          {
+            question: "What is method overriding in OOP?",
+            options: [
+              "Providing a new implementation for a method in a subclass that is already defined in the superclass",
+              "Defining multiple methods with the same name but different parameters in the same class",
+              "Creating private methods that cannot be accessed outside the class",
+              "Declaring methods that cannot be changed in subclasses"
+            ],
+            correctIndex: 0,
+            explanation: "Method overriding is providing a new implementation for a method in a subclass that is already defined in the superclass. This allows a subclass to provide a specific implementation for a method that is already defined in its parent class, supporting polymorphism."
+          },
+          {
+            question: "What does the 'this' keyword refer to in most OOP languages?",
+            options: [
+              "The current instance of the class",
+              "The parent class",
+              "The next object to be created",
+              "The static class variables"
+            ],
+            correctIndex: 0,
+            explanation: "The 'this' keyword refers to the current instance of the class - the object through which a method is being called or an attribute is being accessed. It helps differentiate between instance variables and parameters/local variables with the same name."
+          },
+          {
+            question: "Which design pattern is used when you need to create objects without specifying their concrete classes?",
+            options: [
+              "Factory Method",
+              "Singleton",
+              "Observer",
+              "Decorator"
+            ],
+            correctIndex: 0,
+            explanation: "The Factory Method pattern is used when you need to create objects without specifying their concrete classes. It defines an interface for creating objects but lets subclasses decide which classes to instantiate, allowing for flexibility in object creation."
+          },
+          {
+            question: "What is the purpose of an abstract class in OOP?",
+            options: [
+              "To provide a base class that cannot be instantiated but can be inherited from",
+              "To create multiple instances of the same type",
+              "To hide data from unauthorized access",
+              "To ensure all classes have the same methods"
+            ],
+            correctIndex: 0,
+            explanation: "An abstract class serves as a base class that cannot be instantiated directly but can be inherited from. It can contain a mix of concrete and abstract methods (methods without implementation), forcing subclasses to provide implementations for the abstract methods."
+          },
+          {
+            question: "What is the difference between composition and inheritance in OOP?",
+            options: [
+              "Composition uses 'has-a' relationships while inheritance uses 'is-a' relationships",
+              "Composition only works with abstract classes, while inheritance works with any class",
+              "Inheritance allows method reuse but composition doesn't",
+              "Composition is a Java-specific concept while inheritance is universal"
+            ],
+            correctIndex: 0,
+            explanation: "Composition establishes 'has-a' relationships where an object contains other objects as parts, while inheritance establishes 'is-a' relationships where a subclass is a specialized version of a superclass. Composition is generally more flexible as it enables stronger encapsulation and allows changing behavior at runtime."
+          }
+        ];
         break;
-      case 'chapter-4':
-        topic = 'Web Development';
-        break;
-      case 'chapter-5':
-        topic = 'Databases';
-        break;
-      case 'chapter-6':
-        topic = 'Computer Networks';
-        break;
-      case 'chapter-7':
-        topic = 'Software Engineering';
-        break;
-      case 'chapter-8':
-        topic = 'AI and Machine Learning';
-        break;
-      case 'chapter-9':
-        topic = 'Operating Systems';
-        break;
-      case 'chapter-10':
-        topic = 'Modern Development Tools';
-        break;
+      // Add other chapters as needed, following the same pattern
       default:
-        topic = 'Computer Science';
+        // For other chapters, generate generic but plausible questions
+        questions = [
+          {
+            question: `What is a key principle of ${chapterId.replace('-', ' ')}?`,
+            options: [
+              "Abstraction and modeling of real-world concepts",
+              "Maximizing hardware usage at all costs",
+              "Avoiding documentation and comments",
+              "Writing code that only the original author can understand"
+            ],
+            correctIndex: 0,
+            explanation: `Abstraction and modeling of real-world concepts is a fundamental principle in ${chapterId.replace('-', ' ')}. It allows complex systems to be represented in a simplified, manageable way that focuses on the essential features while hiding unnecessary details.`
+          },
+          {
+            question: `Which of the following is considered a best practice in ${chapterId.replace('-', ' ')}?`,
+            options: [
+              "Writing clean, maintainable code with appropriate comments",
+              "Creating as many global variables as possible",
+              "Avoiding version control systems",
+              "Duplicating code across multiple files"
+            ],
+            correctIndex: 0,
+            explanation: `Writing clean, maintainable code with appropriate comments is a critical best practice in ${chapterId.replace('-', ' ')}. It improves readability, makes debugging easier, enables better collaboration, and reduces technical debt over time.`
+          },
+          {
+            question: `What is a common challenge when implementing ${chapterId.replace('-', ' ')} concepts?`,
+            options: [
+              "Balancing performance with maintainability",
+              "Finding enough monitors to display the code",
+              "Convincing managers that code doesn't need testing",
+              "Writing code that no one else can understand"
+            ],
+            correctIndex: 0,
+            explanation: `Balancing performance with maintainability is a common challenge in ${chapterId.replace('-', ' ')}. Optimized code can sometimes be more complex and harder to maintain, requiring careful tradeoffs between runtime efficiency and developer productivity.`
+          },
+          {
+            question: `In the context of ${chapterId.replace('-', ' ')}, what does "abstraction" mean?`,
+            options: [
+              "Simplifying complex systems by modeling classes appropriate to the problem",
+              "Making code as abstract and confusing as possible",
+              "Removing all comments from code",
+              "Using only abstract data types"
+            ],
+            correctIndex: 0,
+            explanation: `In ${chapterId.replace('-', ' ')}, abstraction refers to the process of simplifying complex systems by creating models that represent the essential features while hiding unnecessary implementation details. This makes systems easier to understand and work with at different levels of complexity.`
+          },
+          {
+            question: `Which of these is NOT typically associated with ${chapterId.replace('-', ' ')}?`,
+            options: [
+              "Avoiding all forms of documentation",
+              "Modular design",
+              "Testing and validation",
+              "Version control"
+            ],
+            correctIndex: 0,
+            explanation: `Avoiding documentation is NOT associated with good ${chapterId.replace('-', ' ')} practices. Proper documentation is essential for maintaining software, onboarding new team members, and ensuring the long-term viability of a project.`
+          },
+          {
+            question: `What is the main benefit of following ${chapterId.replace('-', ' ')} principles?`,
+            options: [
+              "Creating more maintainable, scalable, and robust software",
+              "Impressing colleagues with complex code",
+              "Reducing the need for testing",
+              "Eliminating the need for documentation"
+            ],
+            correctIndex: 0,
+            explanation: `Following ${chapterId.replace('-', ' ')} principles leads to creating more maintainable, scalable, and robust software. These principles have evolved from decades of industry experience and are designed to address common challenges in software development.`
+          },
+          {
+            question: `What role does testing play in ${chapterId.replace('-', ' ')}?`,
+            options: [
+              "It verifies that software meets requirements and functions correctly",
+              "It's an optional step that can be skipped to save time",
+              "It's only necessary for critical systems",
+              "It's only useful for inexperienced developers"
+            ],
+            correctIndex: 0,
+            explanation: `Testing plays a crucial role in ${chapterId.replace('-', ' ')} by verifying that software meets its requirements and functions correctly. It helps identify bugs early, ensures quality, provides documentation, and builds confidence in the code's reliability.`
+          },
+          {
+            question: `Which approach is recommended when designing systems in ${chapterId.replace('-', ' ')}?`,
+            options: [
+              "Start with high-level design before implementation details",
+              "Start coding immediately and figure out the design later",
+              "Copy existing code without understanding it",
+              "Avoid planning to allow for maximum creativity"
+            ],
+            correctIndex: 0,
+            explanation: `Starting with a high-level design before diving into implementation details is a recommended approach in ${chapterId.replace('-', ' ')}. This top-down approach helps ensure that the overall architecture is sound before resources are committed to specific implementations.`
+          },
+          {
+            question: `What is "refactoring" in the context of ${chapterId.replace('-', ' ')}?`,
+            options: [
+              "Restructuring existing code without changing its external behavior",
+              "Completely rewriting an application from scratch",
+              "Removing all comments and documentation",
+              "Adding unnecessary complexity to impress other developers"
+            ],
+            correctIndex: 0,
+            explanation: `In ${chapterId.replace('-', ' ')}, refactoring is the process of restructuring existing code without changing its external behavior. It's done to improve non-functional attributes like readability, complexity, maintainability, or performance.`
+          },
+          {
+            question: `How does ${chapterId.replace('-', ' ')} relate to problem-solving?`,
+            options: [
+              "It provides structured approaches to break down and solve complex problems",
+              "It's unrelated to problem-solving",
+              "It makes problems more complex intentionally",
+              "It focuses exclusively on theoretical problems"
+            ],
+            correctIndex: 0,
+            explanation: `${chapterId.replace('-', ' ')} provides structured approaches to break down and solve complex problems. It offers methodologies, patterns, and tools that help developers analyze problems, design solutions, and implement them effectively.`
+          }
+        ];
     }
     
-    return [
-      {
-        question: `What is the primary purpose of ${topic}?`,
-        options: [
-          `To organize and process data efficiently`,
-          `To create user interfaces`,
-          `To design hardware components`,
-          `To write documentation`
-        ],
-        correctIndex: 0,
-        explanation: `${topic} primarily focuses on organizing and processing data efficiently to solve complex problems.`
-      },
-      {
-        question: `Which of the following is NOT typically associated with ${topic}?`,
-        options: [
-          `Algorithms`,
-          `Data structures`,
-          `Hardware design`,
-          `Problem solving`
-        ],
-        correctIndex: 2,
-        explanation: `Hardware design is typically part of computer engineering, not ${topic}.`
-      },
-      {
-        question: `What is a key benefit of understanding ${topic}?`,
-        options: [
-          `Increased ability to debug complex systems`,
-          `Higher salary potential`,
-          `Reduced need for team collaboration`,
-          `Lower hardware costs`
-        ],
-        correctIndex: 0,
-        explanation: `Understanding ${topic} greatly enhances your ability to debug and troubleshoot complex systems.`
-      },
-      {
-        question: `Which field is most closely related to ${topic}?`,
-        options: [
-          `Mathematics`,
-          `Biology`,
-          `Marketing`,
-          `Literature`
-        ],
-        correctIndex: 0,
-        explanation: `${topic} is most closely related to mathematics, as both involve logical thinking and abstract problem-solving.`
-      },
-      {
-        question: `What is a common challenge when working with ${topic}?`,
-        options: [
-          `Scalability issues`,
-          `Limited application domains`,
-          `Excessive simplicity`,
-          `Too much standardization`
-        ],
-        correctIndex: 0,
-        explanation: `Scalability is often a significant challenge in ${topic} as systems grow in complexity and size.`
-      },
-      {
-        question: `In ${topic}, what does the term "abstraction" most closely refer to?`,
-        options: [
-          `Hiding implementation details`,
-          `Creating virtual reality`,
-          `Working remotely`,
-          `Abstract art`
-        ],
-        correctIndex: 0,
-        explanation: `In ${topic}, abstraction refers to hiding implementation details to manage complexity and focus on relevant aspects.`
-      },
-      {
-        question: `Which programming paradigm is most associated with ${topic}?`,
-        options: [
-          `Object-oriented programming`,
-          `Financial modeling`,
-          `Literary analysis`,
-          `Mechanical engineering`
-        ],
-        correctIndex: 0,
-        explanation: `Object-oriented programming is commonly associated with ${topic} as it provides structured approaches to software development.`
-      },
-      {
-        question: `What is NOT a common career path for someone studying ${topic}?`,
-        options: [
-          `Software developer`,
-          `Systems analyst`,
-          `Mechanical engineer`,
-          `Data scientist`
-        ],
-        correctIndex: 2,
-        explanation: `Mechanical engineering is not typically a direct career path from studying ${topic} as it involves different fundamental principles and training.`
-      },
-      {
-        question: `Which tool is most commonly used in ${topic}?`,
-        options: [
-          `Integrated Development Environments (IDEs)`,
-          `Hammers and screwdrivers`,
-          `Microscopes`,
-          `Paint brushes`
-        ],
-        correctIndex: 0,
-        explanation: `IDEs are essential tools in ${topic} for writing, testing, and debugging code efficiently.`
-      },
-      {
-        question: `What is a fundamental concept in ${topic}?`,
-        options: [
-          `Algorithms`,
-          `Poetry`,
-          `Cooking techniques`,
-          `Fashion design`
-        ],
-        correctIndex: 0,
-        explanation: `Algorithms are fundamental to ${topic}, providing step-by-step procedures for solving problems efficiently.`
+    return questions;
+  }
+  
+  /**
+   * Randomize the positions of options in each question and update the correctIndex accordingly
+   * 
+   * @param questions - Array of quiz questions to randomize
+   * @returns Array of questions with randomized option positions
+   */
+  private randomizeOptionPositions(questions: QuizQuestion[]): QuizQuestion[] {
+    // Create a deep copy of the questions to avoid modifying the original
+    const randomizedQuestions = JSON.parse(JSON.stringify(questions)) as QuizQuestion[];
+    
+    // Randomize each question's options
+    randomizedQuestions.forEach(question => {
+      if (!question.options || !Array.isArray(question.options) || question.correctIndex === undefined) {
+        console.warn("Skipping randomization for invalid question:", question);
+        return;
       }
-    ];
+      
+      // Save the correct answer text based on the original correctIndex
+      const correctAnswer = question.options[question.correctIndex];
+      
+      // Create an array of indices [0, 1, 2, 3] and shuffle it
+      const newOrder = this.shuffleArray([0, 1, 2, 3]);
+      
+      // Rearrange options according to the new order
+      const newOptions = newOrder.map(i => 
+        i < question.options.length ? question.options[i] : null
+      ).filter(Boolean) as string[];
+      
+      // Find where the correct answer ended up after shuffling
+      const newCorrectIndex = newOptions.indexOf(correctAnswer);
+      
+      // Update the question with the new order
+      question.options = newOptions;
+      question.correctIndex = newCorrectIndex;
+    });
+    
+    return randomizedQuestions;
+  }
+  
+  /**
+   * Shuffle an array using the Fisher-Yates algorithm
+   * 
+   * @param array - Array to shuffle
+   * @returns Shuffled array
+   */
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
   }
 }
 
-// Create a singleton instance
 export const diagnosticsService = new DiagnosticsService();
 export default diagnosticsService;
