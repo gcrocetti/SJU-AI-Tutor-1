@@ -6,6 +6,7 @@
  */
 
 import { AgentAction } from './api';
+import { TextEvaluation } from './diagnostics';
 
 /**
  * Message sender type
@@ -41,6 +42,21 @@ export interface Message {
     confidence?: number;
     /** Session ID for maintaining conversation context */
     sessionId?: string;
+    /** Knowledge check data for free response questions */
+    knowledgeCheck?: {
+      /** Type of knowledge check */
+      type: 'free-response';
+      /** Topic being assessed */
+      topic: string;
+      /** The prompt/question for the user */
+      prompt: string;
+      /** Whether this message is awaiting a response */
+      awaitingResponse: boolean;
+      /** User's response (if submitted) */
+      response?: string;
+      /** Evaluation of the response (if evaluated) */
+      evaluation?: TextEvaluation;
+    };
   };
 }
 

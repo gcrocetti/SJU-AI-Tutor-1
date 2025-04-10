@@ -18,6 +18,7 @@ import os
 from agents.orchestrator.agent import process_query as orchestrator_process
 from agents.university_agent.agent import process_query as university_process
 from agents.motivator_agent.agent import process_query as motivator_process
+from agents.knowledge_check_agent.agent import process_query as knowledge_check_process
 
 # Create the Flask application
 app = Flask(__name__)
@@ -131,6 +132,19 @@ def direct_agent(agent_id):
                 session_id=session_id,
                 message_history=message_history
             )
+        elif agent_id == 'knowledge_check':
+            result = knowledge_check_process(
+                query=data['message'],
+                session_id=session_id,
+                message_history=message_history
+            )
+            
+            # The knowledge check agent may return additional data
+            return jsonify({
+                'response': result.get('response', ''),
+                'data': result.get('data', {}),
+                'session_id': session_id
+            })
         else:
             return jsonify({
                 'error': f'Unknown agent: {agent_id}'

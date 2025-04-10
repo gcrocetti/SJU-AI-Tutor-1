@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LineChart from '../LineChart/LineChart';
 import diagnosticService from '../../services/diagnosticService';
 import {
   UserProfile,
   ProgressMetrics,
   TaskItem,
-  KnowledgeCheckQuestion,
   Achievement,
   ImportantDate,
   Announcement,
@@ -47,9 +47,6 @@ const DiagnosticView: React.FC = () => {
   // Upcoming and current tasks
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   
-  // Current knowledge check/quiz question
-  const [knowledgeCheck, setKnowledgeCheck] = useState<KnowledgeCheckQuestion | null>(null);
-  
   // Student achievements/badges
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   
@@ -65,10 +62,8 @@ const DiagnosticView: React.FC = () => {
   // Loading state for API calls
   const [isLoading, setIsLoading] = useState<boolean>(true);
   
-  // Knowledge check interaction states
-  const [selectedAnswer, setSelectedAnswer] = useState<number>(-1);
-  const [answerSubmitted, setAnswerSubmitted] = useState<boolean>(false);
-  const [answerCorrect, setAnswerCorrect] = useState<boolean | null>(null);
+  // Navigation hook
+  const navigate = useNavigate();
 
   /**
    * Fetches all diagnostic data on component mount
@@ -96,9 +91,6 @@ const DiagnosticView: React.FC = () => {
 
         const taskList = await diagnosticService.getTasks();
         setTasks(taskList);
-
-        const question = await diagnosticService.getKnowledgeCheck();
-        if (question) setKnowledgeCheck(question);
 
         const achievementList = await diagnosticService.getAchievements();
         setAchievements(achievementList);
@@ -136,40 +128,14 @@ const DiagnosticView: React.FC = () => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  /**
-   * Handles submission of answers to knowledge check questions
-   * 
-   * Currently uses mock API, will need to be updated to use real backend
-   * 
-   * @param e - The form submission event
-   */
-  const handleSubmitAnswer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedAnswer < 0 || !knowledgeCheck) return;
-
-    setAnswerSubmitted(true);
-    try {
-      // Send the answer to the backend and get feedback
-      // This will eventually be a real API call
-      const isCorrect = await diagnosticService.submitKnowledgeCheckAnswer(
-        knowledgeCheck.id,
-        selectedAnswer
-      );
-      setAnswerCorrect(isCorrect);
-      
-      // TODO: Implement logic to fetch a new question after submission
-      // TODO: Add tracking of correct/incorrect answers over time
-    } catch (error) {
-      console.error('Error submitting answer:', error);
-      setAnswerCorrect(false);
-      // TODO: Add better error handling and retry logic
-    }
-  };
+  // No longer needed since we removed the simple knowledge check
 
   // Show loading indicator while data is being fetched
   if (isLoading) {
     return <div className="loading-container">Loading diagnostics data...</div>;
   }
+
+  // No longer needed - route-based approach instead
 
   return (
     <div className="diagnostics-main">
@@ -223,55 +189,28 @@ const DiagnosticView: React.FC = () => {
         {/* Knowledge Check Card */}
         <div className="card knowledge-card">
           <h4>Knowledge Check:</h4>
-          {knowledgeCheck && (
-            <form onSubmit={handleSubmitAnswer}>
-              <p>{knowledgeCheck.question}</p>
-              
-              {knowledgeCheck.options.map((option, index) => (
-                <label
-                  key={index}
-                  className={
-                    answerSubmitted
-                      ? index === knowledgeCheck.correctAnswer
-                        ? 'correct-answer'
-                        : index === selectedAnswer && index !== knowledgeCheck.correctAnswer
-                        ? 'incorrect-answer'
-                        : ''
-                      : ''
-                  }
-                >
-                  <input
-                    type="radio"
-                    name="answer"
-                    value={index}
-                    onChange={() => setSelectedAnswer(index)}
-                    disabled={answerSubmitted}
-                  />{' '}
-                  {option}
-                </label>
-              ))}
-              
-              {!answerSubmitted ? (
-                <input
-                  type="submit"
-                  value="Submit"
-                  disabled={selectedAnswer < 0}
-                  className="submit-button"
-                />
-              ) : (
-                <div className={`answer-feedback ${answerCorrect ? 'correct' : 'incorrect'}`}>
-                  {answerCorrect
-                    ? 'Correct! Well done.'
-                    : `Incorrect. The correct answer is "${knowledgeCheck.options[knowledgeCheck.correctAnswer]}".`}
-                </div>
-              )}
-            </form>
-          )}
-          {/* 
-            TODO: Add progress tracker for knowledge checks
-            TODO: Implement mechanism to get new questions
-            TODO: Add difficulty levels and categories
-          */}
+          
+          <div style={{ padding: '20px 0', textAlign: 'center' }}>
+            <p style={{ marginBottom: '20px' }}>
+              Test your understanding with chapter quizzes.
+              Each quiz contains 10 multiple choice questions to help you
+              gauge your knowledge.
+            </p>
+            
+            <button 
+              className="submit-button" 
+              style={{ 
+                width: '150px', 
+                padding: '12px 0',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                margin: '0 auto'
+              }}
+              onClick={() => navigate('/diagnostics/chapters')}
+            >
+              Start
+            </button>
+          </div>
         </div>
 
         {/* Achievements Card */}
@@ -332,20 +271,42 @@ const DiagnosticView: React.FC = () => {
         {/* Resources Card */}
         <div className="card resources-card">
           <h4>Resources</h4>
-          <div className="resources-list">
-            {resources.map((resource) => (
-              <div key={resource.id} className="resource-item">
-                <a href={resource.url} target="_blank" rel="noopener noreferrer">
-                  {resource.title}
-                </a>
-              </div>
-            ))}
+          
+          {/* University Resources */}
+          <div className="resource-category">
+            <h5>University</h5>
+            <div className="resources-list">
+              {resources
+                .filter(resource => resource.category === 'university')
+                .map((resource) => (
+                  <div key={resource.id} className="resource-item">
+                    <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                      {resource.title}
+                    </a>
+                  </div>
+                ))
+              }
+            </div>
           </div>
-          {/* 
-            TODO: Add resource categorization
-            TODO: Implement resource search functionality
-            TODO: Add resource recommendations based on progress
-          */}
+          
+          {/* Academic Resources */}
+          {resources.filter(resource => resource.category === 'academic').length > 0 && (
+            <div className="resource-category">
+              <h5>Academic</h5>
+              <div className="resources-list">
+                {resources
+                  .filter(resource => resource.category === 'academic')
+                  .map((resource) => (
+                    <div key={resource.id} className="resource-item">
+                      <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                        {resource.title}
+                      </a>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
