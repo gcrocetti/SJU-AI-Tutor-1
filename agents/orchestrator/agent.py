@@ -65,7 +65,7 @@ class AgentSelection(BaseModel):
     
     @validator('selected_agents')
     def validate_selected_agents(cls, v):
-        valid_agents = {"university", "motivator", "teacher"}
+        valid_agents = {"university", "motivator", "teacher", "knowledge_check", "academic_coach"}
         for agent in v:
             if agent not in valid_agents:
                 raise ValueError(f"Invalid agent ID: {agent}. Must be one of {valid_agents}")
@@ -256,6 +256,16 @@ def route_to_agents(state: OrchestratorState) -> OrchestratorState:
             elif agent_id == "teacher":
                 from agents.teacher_agent.agent import process_query as teacher_process
                 response = teacher_process(subquery, state["session_id"], state["messages"])
+                agent_responses[agent_id] = response
+                
+            elif agent_id == "knowledge_check":
+                from agents.knowledge_check_agent.agent import process_query as knowledge_check_process
+                response = knowledge_check_process(subquery, state["session_id"], state["messages"])
+                agent_responses[agent_id] = response
+                
+            elif agent_id == "academic_coach":
+                from agents.academic_coach_agent.agent import process_query as academic_coach_process
+                response = academic_coach_process(subquery, state["session_id"], state["messages"])
                 agent_responses[agent_id] = response
                 
             else:

@@ -165,7 +165,7 @@
   border-top: 1px solid #eee;
   position: sticky;
   bottom: 0;
-  align-items: center;
+  align-items: flex-end; /* Align to bottom for multiline input */
 }
 
 /* Input Field */
@@ -179,7 +179,13 @@
   font-family: "Georgia", serif;
   font-size: 16px;
   outline: none;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, height 0.1s ease;
+  min-height: 46px;
+  max-height: 150px;
+  line-height: 1.5;
+  overflow-y: auto;
+  word-wrap: break-word;
+  resize: none; /* Control resize through JS instead */
 }
 
 .input-field:focus {
@@ -225,6 +231,202 @@
   cursor: not-allowed;
 }
 
+/* Markdown Styling */
+.markdown-content {
+  width: 100%;
+}
+
+.fallback-text {
+  width: 100%;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.markdown-content a,
+.markdown-link {
+  color: #0066cc;
+  text-decoration: underline;
+}
+
+.user-message .markdown-content a,
+.user-message .markdown-link {
+  color: #ffffff;
+  text-decoration-color: rgba(255, 255, 255, 0.7);
+}
+
+.markdown-content pre {
+  background-color: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.code-block {
+  font-family: monospace;
+  white-space: pre;
+  display: block;
+  width: 100%;
+}
+
+.inline-code {
+  font-family: monospace;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.user-message .inline-code {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.markdown-blockquote {
+  border-left: 3px solid #ccc;
+  margin-left: 0;
+  padding-left: 15px;
+  color: #555;
+}
+
+.user-message .markdown-blockquote {
+  border-left-color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.markdown-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 15px 0;
+}
+
+.markdown-table th,
+.markdown-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.markdown-table th {
+  background-color: #f2f2f2;
+}
+
+.user-message .markdown-table th,
+.user-message .markdown-table td {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.user-message .markdown-table th {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Headings */
+.markdown-h1, .markdown-h2, .markdown-h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.markdown-h1 {
+  font-size: 1.5em;
+}
+
+.markdown-h2 {
+  font-size: 1.3em;
+}
+
+.markdown-h3 {
+  font-size: 1.1em;
+}
+
+/* Lists */
+.markdown-content ul,
+.markdown-content ol {
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+/* Knowledge Check Styling */
+.knowledge-check-container {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 8px 0;
+  border-left: 4px solid #cf102d;
+  width: 100%;
+}
+
+.knowledge-check-prompt h3 {
+  color: #2c3e50;
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.knowledge-check-response-form {
+  margin-top: 16px;
+}
+
+.knowledge-check-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 16px;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+
+.knowledge-check-submit {
+  background-color: #cf102d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.knowledge-check-submit:hover {
+  background-color: #a80d24;
+}
+
+.knowledge-check-submit:disabled {
+  background-color: #a0a0a0;
+  cursor: not-allowed;
+}
+
+.knowledge-check-submitted {
+  margin-top: 16px;
+}
+
+.knowledge-check-response h4,
+.knowledge-check-evaluation h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 16px;
+  color: #2c3e50;
+}
+
+.user-markdown-response {
+  background-color: rgba(0, 0, 0, 0.03);
+  border-radius: 6px;
+  padding: 10px;
+  border: 1px solid #ddd;
+}
+
+.knowledge-check-evaluation {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ddd;
+}
+
+.evaluation-score {
+  font-size: 18px;
+  font-weight: bold;
+  color: #cf102d;
+}
+
 /* Responsive Styling */
 @media (max-width: 768px) {
   .message {
@@ -247,5 +449,13 @@
   .send-button svg {
     width: 20px;
     height: 20px;
+  }
+  
+  .knowledge-check-container {
+    padding: 12px;
+  }
+  
+  .knowledge-check-textarea {
+    padding: 8px;
   }
 }

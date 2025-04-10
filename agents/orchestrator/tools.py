@@ -41,7 +41,7 @@ def format_agent_descriptions() -> str:
             "name": "Motivator Agent (Emotional Support Specialist)",
             "expertise": "Stress management, motivation, academic anxiety, emotional well-being, confidence building",
             "best_for": "Emotional support, motivation strategies, stress management techniques",
-            "avoid_for": "Specific factual information about university policies or procedures, course content or syllabi",
+            "avoid_for": "Specific factual information about university policies or procedures, course content or syllabi, study planning and organization",
             "example_queries": [
                 "I'm feeling overwhelmed with my coursework",
                 "How do I stay motivated during finals?",
@@ -57,7 +57,7 @@ def format_agent_descriptions() -> str:
             "expertise": "Course content delivery, syllabus information, supplemental materials, probing questions, lesson reviews, progress tracking",
             "best_for": "Deep learning of course material, understanding concepts, study guidance, content exploration, ALL syllabus and course topics",
             "exclusive_for": "Any syllabus-related queries, course content overview, class topics, discussion topics",
-            "avoid_for": "University policies, general university information, emotional support",
+            "avoid_for": "University policies, general university information, emotional support, study planning and time management",
             "example_queries": [
                 "Can you help me understand object-oriented programming?",
                 "I'm confused about the concept of neural networks",
@@ -67,6 +67,40 @@ def format_agent_descriptions() -> str:
                 "Can you summarize the main points from today's lecture?",
                 "What topics are up for discussion today?",
                 "Can you give me an overview of what we're learning?"
+            ]
+        },
+        
+        "knowledge_check": {
+            "id": "knowledge_check",
+            "name": "Knowledge Check Agent (Assessment Specialist)",
+            "expertise": "Quiz generation, knowledge assessment, understanding evaluation, learning gap identification",
+            "best_for": "Testing knowledge retention, checking understanding of concepts, preparing for exams, identifying knowledge gaps",
+            "avoid_for": "Emotional support, university information, detailed concept explanations",
+            "example_queries": [
+                "Test my knowledge on object-oriented programming",
+                "Give me a quiz on data structures",
+                "Check my understanding of neural networks",
+                "I want to practice with some questions on database design",
+                "Can you evaluate what I know about software engineering?"
+            ]
+        },
+        
+        "academic_coach": {
+            "id": "academic_coach",
+            "name": "Academic Coach Agent (Study & Organization Specialist)",
+            "expertise": "Study planning, time management, goal setting, academic organization, progress tracking, learning strategy development",
+            "best_for": "Creating study plans, developing time management strategies, setting academic goals, organizing study materials, tracking progress",
+            "exclusive_for": "Study planning, time management, academic organization, goal setting, tracking progress",
+            "avoid_for": "Specific course content explanations, emotional support, university policies and procedures",
+            "example_queries": [
+                "Help me create a study plan for my computer science course",
+                "I need strategies for managing my time better",
+                "Can you help me set academic goals for this semester?",
+                "I need a better system for organizing my study materials",
+                "How can I track my progress in my courses?",
+                "What study techniques work best for memorizing formulas?",
+                "I keep procrastinating on my assignments",
+                "How do I prioritize my studying when I have multiple exams?"
             ]
         }
     }
@@ -231,6 +265,47 @@ def identify_educational_content(text: str) -> Tuple[bool, float]:
     return has_educational, confidence
 
 
+def identify_study_planning_content(text: str) -> Tuple[bool, float]:
+    """
+    Identify content requesting study planning and organization help.
+    
+    Args:
+        text: The text to analyze
+        
+    Returns:
+        Tuple of (has_study_planning_content, confidence_score)
+    """
+    # Keywords related to study planning and time management
+    study_planning_terms = [
+        "study plan", "schedule", "time management", "organize", "prioritize",
+        "procrastination", "productivity", "focus", "concentration", "distracted",
+        "plan", "planning", "goal", "goals", "objective", "target", "track progress",
+        "tracking", "method", "strategy", "technique", "approach", "system",
+        "balance", "juggle", "manage", "organize", "routine", "habit", "effective",
+        "efficient", "productive", "calendar", "timetable", "deadline", "due date",
+        "task", "todo", "to-do", "list", "prioritization", "overwhelmed"
+    ]
+    
+    # First-person indicators related to planning
+    planning_context = [
+        "i need", "i want", "i'm trying", "i am trying", "i'd like", "i would like",
+        "how do i", "how can i", "help me", "i have trouble", "i struggle with",
+        "i'm struggling with", "my study", "my time", "my goals", "my schedule"
+    ]
+    
+    # Count occurrences
+    text_lower = text.lower()
+    planning_count = sum(term in text_lower for term in study_planning_terms)
+    context_count = sum(term in text_lower for term in planning_context)
+    
+    # Calculate confidence score
+    confidence = min(1.0, (planning_count * 0.2) + (context_count * 0.15))
+    
+    # Determine if study planning content is requested
+    has_planning = planning_count > 0 and context_count > 0
+    
+    return has_planning, confidence
+
 def extract_query_components(text: str) -> Dict[str, Any]:
     """
     Extract key components from a query to help with routing.
@@ -245,6 +320,7 @@ def extract_query_components(text: str) -> Dict[str, Any]:
         "emotional_content": False,
         "information_request": False,
         "educational_content": False,
+        "study_planning_content": False,
         "question_marks_count": text.count("?"),
         "word_count": len(text.split()),
         "suggested_agents": set()
@@ -273,6 +349,14 @@ def extract_query_components(text: str) -> Dict[str, Any]:
     
     if educational and edu_conf > 0.25:
         components["suggested_agents"].add("teacher")
+    
+    # Check for study planning content
+    planning, planning_conf = identify_study_planning_content(text)
+    components["study_planning_content"] = planning
+    components["study_planning_confidence"] = planning_conf
+    
+    if planning and planning_conf > 0.3:
+        components["suggested_agents"].add("academic_coach")
     
     # Convert set to list for serialization
     components["suggested_agents"] = list(components["suggested_agents"])
