@@ -6,7 +6,7 @@ This system uses a multi-agent approach to provide comprehensive support for uni
 
 1. **University Information Agent**
    * Provides accurate information about university resources, policies, and procedures
-   * Uses RAG (Retrieval Augmented Generation) to incorporate current university knowledge
+   * Uses RAG (Retrieval Augmented Generation) to incorporate current university knowledge using Google CSE.
    * Answers questions about courses, deadlines, requirements, and campus resources
 
 2. **Motivator Agent (Emotional Support Specialist)**
