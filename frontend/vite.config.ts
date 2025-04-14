@@ -9,7 +9,17 @@ const __dirname = dirname(__filename);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      // Add these options for React 19 compatibility
+      jsxImportSource: 'react',
+      babel: {
+        plugins: [
+          // Any babel plugins you might need
+        ],
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
