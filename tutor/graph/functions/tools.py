@@ -3,12 +3,12 @@ from langchain_google_community import GoogleSearchAPIWrapper
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 from tutor.config import PINECONE_API_KEY, PINECONE_INDEX_NAME, EMBEDDING_MODEL_NAME
-from tutor.graph.config import MAX_DOCS_RETRIEVED
 
 # Tool Definitions
 # I will implement these tools as I go through the tutor implementation
 
 search = GoogleSearchAPIWrapper()
+MAX_DOCS_RETRIEVED = 15
 
 google_search_tool = Tool(
     name="google-search",

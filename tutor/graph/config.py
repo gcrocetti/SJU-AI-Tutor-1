@@ -1,7 +1,6 @@
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from tutor.graph.functions.tools import retrieve_course_material_tool, google_search_tool, google_sju_search_tool
 
-MAX_DOCS_RETRIEVED = 15
 HISTORY_LENGTH = 10
 CHAT_MODEL = "gpt-4o"
 TEMPERATURE = 0.5
