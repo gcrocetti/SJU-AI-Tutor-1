@@ -4,7 +4,7 @@ Test script for the orchestrator agent.
 
 This script allows testing the orchestrator agent locally before deployment.
 It simulates a conversation by accepting user input, routing to appropriate
-specialized agents, and displaying the aggregated response.
+specialized tutor, and displaying the aggregated response.
 
 Updated for LangChain 0.3+ compatibility.
 """
@@ -39,7 +39,7 @@ if not os.environ.get("GOOGLE_API_KEY") or not os.environ.get("GOOGLE_CSE_ID"):
 
 # Import the agent processing function
 try:
-    from agents.orchestrator.agent import process_query
+    from tutor.orchestrator.agent import process_query
 except ImportError as e:
     print(f"Error importing the orchestrator agent: {e}")
     print("Make sure you've set up the project structure correctly.")
