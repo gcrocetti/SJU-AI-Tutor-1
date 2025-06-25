@@ -14,11 +14,11 @@ from flask_cors import CORS
 import uuid
 import os
 
-# Import the agents
-from agents.orchestrator.agent import process_query as orchestrator_process
-from agents.university_agent.agent import process_query as university_process
-from agents.motivator_agent.agent import process_query as motivator_process
-from agents.knowledge_check_agent.agent import process_query as knowledge_check_process
+# Import the tutor
+from tutor.orchestrator.agent import process_query as orchestrator_process
+from tutor.university_agent.agent import process_query as university_process
+from tutor.motivator_agent.agent import process_query as motivator_process
+from tutor.knowledge_check_agent.agent import process_query as knowledge_check_process
 
 # Create the Flask application
 app = Flask(__name__)
@@ -54,7 +54,7 @@ def chat():
     {
         "response": "Agent's response text",
         "session_id": "Session ID for this conversation",
-        "used_agents": ["List of agents used to generate the response"]
+        "used_agents": ["List of tutor used to generate the response"]
     }
     """
     data = request.json

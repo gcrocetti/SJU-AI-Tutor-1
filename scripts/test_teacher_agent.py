@@ -34,7 +34,7 @@ if missing_vars:
 
 # Import the agent processing function
 try:
-    from agents.teacher_agent.agent import process_query
+    from tutor.teacher_agent.agent import process_query
 except ImportError as e:
     print(f"Error importing the teacher agent: {e}")
     print("Make sure you've set up the project structure correctly.")
