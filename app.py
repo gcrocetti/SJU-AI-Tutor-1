@@ -212,4 +212,4 @@ if __name__ == '__main__':
         print(f"{methods} {rule}")
     
     # Run the server
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)
