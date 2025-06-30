@@ -87,7 +87,7 @@ npm run dev &
 frontend_pid=$!
 
 echo -e "${GREEN}Both servers are running!${NC}"
-echo -e "${GREEN}Backend API: http://localhost:5000${NC}"
+echo -e "${GREEN}Backend API: http://localhost:5001${NC}"
 echo -e "${GREEN}Frontend: http://localhost:3000${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop all servers${NC}"
 
