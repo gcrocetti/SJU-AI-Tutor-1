@@ -62,7 +62,7 @@ export class ChatService {
         sender: 'bot',
         timestamp: new Date(),
         metadata: {
-          // Include which agents were used and the session ID
+          // Include which tutor were used and the session ID
           thinking: true,
           sessionId: returnedSessionId,
           actions: result.used_agents?.map((agent: string) => ({

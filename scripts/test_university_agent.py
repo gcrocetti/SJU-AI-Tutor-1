@@ -33,7 +33,7 @@ if missing_vars:
 
 # Import the agent processing function
 try:
-    from agents.university_agent.agent import process_query
+    from tutor.university_agent.agent import process_query
 except ImportError as e:
     print(f"Error importing the university agent: {e}")
     print("Make sure you've set up the project structure correctly.")
@@ -93,5 +93,5 @@ def main():
             
         print("-" * 80)
 
-if __name__ == "__main__":
+if __name__ == "__main__" or __name__ == "test_university_agent":
     main()
