@@ -48,7 +48,7 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub sju-ai-tutor-api-${Environment}
-      Description: API Gateway for SJU AI Tutor agents
+      Description: API Gateway for SJU AI Tutor tutor
       EndpointConfiguration:
         Types:
           - REGIONAL

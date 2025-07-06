@@ -224,7 +224,7 @@ npm install aws-amplify  # For AWS Cognito authentication
 
 7. Test the agents locally:
    ```bash
-   # Test individual agents
+   # Test individual tutor
    python scripts/test_university_agent.py
    python scripts/test_motivator_agent.py
    python scripts/test_teacher_agent.py

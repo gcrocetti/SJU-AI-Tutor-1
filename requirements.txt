@@ -1,15 +1,27 @@
 # Core LLM and agent frameworks - updated for LangChain 0.3+
 langchain>=0.3.0
+langgraph>=0.4.8
+langgraph-checkpoint-sqlite>=2.0.10
+langchain-community>=0.3.1
+langchain-google-community>=2.0.7
 langchain-openai>=0.1.0
-langgraph>=0.1.0
+langchain-core>=0.3.64
 openai>=1.6.0
 pydantic>=2.0.0
 httpcore>=1.0.0  # Required by OpenAI library
 httpx>=0.24.0    # Required by OpenAI library
+aiosqlite>=0.21.0
+google-api-python-client>=2.173.0
+
+# Pinecone Vector Database
+pinecone>=5.4.2
+pypdf>=5.6.0
 
 # Flask server for local development
 flask==2.3.3
 flask-cors==4.0.0
+Quart>=0.20.0
+quart-cors>=0.8.0
 
 # AWS dependencies
 boto3>=1.34.0
@@ -20,23 +32,25 @@ python-dotenv>=1.0.0
 requests>=2.31.0
 urllib3>=2.0.7
 tiktoken>=0.5.1
+beautifulsoup4>=4.13.4
+docx2txt>=0.9
 
 # Document processing and text analysis (from professor's code)
-pdfplumber==0.10.3
-markdownify==0.11.6
-spacy==3.7.2
-keybert==0.8.4
-sumy==0.11.0
-nltk==3.9.1
-pyyaml==6.0.1
+#pdfplumber==0.10.3
+#markdownify==0.11.6
+#spacy==3.7.2
+#keybert==0.8.4
+#sumy==0.11.0
+#nltk==3.9.1
+#pyyaml==6.0.1
 
 # Vector database
 pinecone>=3.0.0  # Using pinecone package as recommended by Pinecone
 
 # Data science and ML libraries (from professor's code)
-numpy==1.26.2
-scikit-learn==1.6.1
-scipy==1.11.4
+#numpy==1.26.2
+#scikit-learn==1.6.1
+#scipy==1.11.4
 
 # Development tools
 pytest>=7.4.0
