@@ -28,7 +28,7 @@ import authService from './authService';
  */
 export class DiagnosticsService {
   // API base URL
-  private apiBaseUrl = 'http://localhost:5000/api';
+  private apiBaseUrl = 'http://localhost:5001/api';
 
   /**
    * Get the authentication headers for API requests
