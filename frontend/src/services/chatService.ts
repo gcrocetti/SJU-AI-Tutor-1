@@ -35,7 +35,7 @@ export class ChatService {
     
     try {
       // Make the API call to the Flask backend
-      const response = await fetch('http://localhost:5000/api/chat', {
+      const response = await fetch('http://localhost:5001/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -90,7 +90,7 @@ export class ChatService {
   async getConversations(): Promise<Conversation[]> {
     try {
       // Make API call to the sessions endpoint
-      const response = await fetch('http://localhost:5000/api/sessions');
+      const response = await fetch('http://localhost:5001/api/sessions');
       
       if (!response.ok) {
         throw new Error('Failed to fetch conversations');
@@ -123,7 +123,7 @@ export class ChatService {
   async getConversation(id: string): Promise<Conversation | null> {
     try {
       // Make API call to get the specific session
-      const response = await fetch(`http://localhost:5000/api/sessions/${id}`);
+      const response = await fetch(`http://localhost:5001/api/sessions/${id}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch conversation ${id}`);
