@@ -19,4 +19,4 @@ DISTRESS_KEYWORDS = ["suicidal", "ending it all", "kill myself", "hopeless", "wa
 
 # Parameters for agents
 MOTIVATOR_CHECK_MINUTES = 5
-STATE_DB = "C:/tmp/ciro_state.db"
+STATE_DB = "./tmp/ciro_state.db"
