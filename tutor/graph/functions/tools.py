@@ -13,13 +13,19 @@ MAX_DOCS_RETRIEVED = 15
 google_search_tool = Tool(
     name="google-search",
     func=search.run,
-    description="Use this tool to search the web using Google Programmable Search"
+    description="Use this tool for any generic search on the web using Google"
 )
 
 google_sju_search_tool = Tool(
     name="google-sju-search",
-    func=lambda q: search.run(f"site:stjohns.edu {q}"),
-    description="Use this tool to search the web using Google Programmable Search"
+    func=lambda q: search.run(f"{q} (site:stjohns.edu"),
+    description="Use this tool to search information specific to St. John's University using Google"
+)
+
+google_career_search_tool = Tool(
+    name="google-career-search",
+    func=lambda q: search.run(f"{q} site:careerservices.stjohns.edu"),
+    description="Use this tool to search information specific to St. John's University Career Services using Google"
 )
 
 @tool

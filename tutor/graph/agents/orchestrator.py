@@ -18,6 +18,20 @@ async def orchestrator_agent(state: GraphState) -> Dict:
     messages = state.get("messages", []).copy()
     messages.append(state["new_message"])
 
+    # Add cycle detection
+    routing_history = state.get("routing_history", [])
+    current_depth = state.get("current_depth", 0)
+    max_depth = state.get("max_routing_depth")
+
+    # <TO DO - HANDLE LONG CONVERSATIONS max_depth > 500?>
+    #if current_depth >= max_depth:
+    #    print("Max routing depth reached. Ending conversation.")
+    #    return {
+    #        "messages": messages,
+    #        "next_agent": "END",
+    #        "agent_task_description": "Maximum conversation depth reached.",
+    #    }
+
     # Proactive check-in logic
     student_profile = state["student_profile"]
     last_check_in = student_profile.get("last_check_in_time")
@@ -37,12 +51,18 @@ async def orchestrator_agent(state: GraphState) -> Dict:
     and the conversation history to determine the student's intent. Then, route them to the correct specialist agent.
 
     Available Agents:
-    - ciro: For general conversations with the student.
-    - academic_coach: For study strategies, time management, goal setting.
-    - teacher: For explaining concepts, homework help, specific subject questions.
-    - motivator: For emotional support, stress, anxiety, lack of motivation.
-    - university: For university-specific info like deadlines, policies, etc.
-    - clarify: If the user's query is ambiguous or you need more information.
+    - ciro: For general conversations, introductions, and casual interactions with the student.
+    - academic_coach: For study strategies, time management, goal setting, academic planning, and learning techniques.
+    - teacher: For explaining concepts, homework help, specific subject questions, and academic content.
+    - motivator: For emotional support, stress management, anxiety, lack of motivation, and mental wellness.
+    - university: For university-specific information including:
+      * Academic deadlines, policies, and procedures
+      * Career services, job/internship opportunities, and career guidance
+      * Campus resources, facilities, and services
+      * Administrative matters and student support services
+      * Resume building, interview preparation, and professional development
+      * Graduate school preparation and career planning
+    - clarify: If the user's query is ambiguous or you need more information to route properly.
 
     The student profile is the following: \n"""
 
@@ -68,23 +88,19 @@ async def orchestrator_agent(state: GraphState) -> Dict:
 
     structured_llm = LLM.with_structured_output(OrchestratorDecision)
 
-    # Hard-coded safety override for emotional distress
-    if any(keyword in user_msg.lower() for keyword in EMOTIONAL_KEYWORDS):
-        print("Distress keywords detected. Overriding route to Motivator.")
-        return {
-            "messages": messages,
-            "next_agent": "motivator",
-            "agent_task_description": f"The student's message is: '{user_msg}'. They seem to be distressed. Please provide support.",
-        }
-
     try:
         decision = await structured_llm.ainvoke(prompt.format(user_query=user_msg))
         print(f"Orchestrator Decision: Route to {decision.next_agent}. Task: {decision.task_description}")
+
+        # Update routing tracking
+        routing_history.append(decision.next_agent)
 
         return {
             "messages": messages,
             "next_agent": decision.next_agent,
             "agent_task_description": decision.task_description,
+            "routing_history": routing_history,
+            "current_depth": current_depth + 1,
         }
     except Exception as e:
         print(f"Orchestrator failed: {e}. Defaulting to teacher.")
@@ -92,4 +108,6 @@ async def orchestrator_agent(state: GraphState) -> Dict:
             "messages": messages,
             "next_agent": "teacher",
             "agent_task_description": user_msg,  # Pass the original query
+            "routing_history": routing_history,
+            "current_depth": current_depth + 1,
         }

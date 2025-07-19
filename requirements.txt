@@ -12,6 +12,7 @@ httpcore>=1.0.0  # Required by OpenAI library
 httpx>=0.24.0    # Required by OpenAI library
 aiosqlite>=0.21.0
 google-api-python-client>=2.173.0
+grandalf>=0.8
 
 # Pinecone Vector Database
 pinecone>=5.4.2
