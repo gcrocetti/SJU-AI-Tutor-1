@@ -1,9 +1,10 @@
 import datetime
 from langchain_core.messages import HumanMessage
-from langgraph.constants import START
+from langgraph.constants import START, END
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from tutor.graph.config import STATE_DB, LLM, TOOLS
+from tutor.graph.agents.responder import responder_agent
 from tutor.graph.agents.academic_coach import academic_coach_agent
 from tutor.graph.agents.clarify import clarify_agent
 from tutor.graph.functions.helpers import GraphState, end_node
@@ -29,14 +30,18 @@ class CiroTutor:
 
         async def route_agent(state: GraphState) -> str:
             next_agent = state.get("next_agent")
-            if not next_agent:
-                raise ValueError("Missing 'next_agent' in state.")
+            if not next_agent or next_agent not in ["academic_coach", "teacher", "motivator", "university", "clarify",
+                                                    "END"]:
+                print(f"Invalid or missing next_agent: {next_agent}. Defaulting to END.")
+                return "end_node"
+
             if next_agent == "END":
                 return "end_node"
+
             return next_agent
 
         async def route_back_to_caller(state: GraphState) -> str:
-            return state["next_agent"]
+            return "end_node"
 
         conn = await aiosqlite.connect(STATE_DB)
         saver = AsyncSqliteSaver(conn)
@@ -48,21 +53,19 @@ class CiroTutor:
         workflow.add_node("teacher", teacher_agent)
         workflow.add_node("motivator", motivator_agent)
         workflow.add_node("university", university_agent)
-        workflow.add_node("end_node", end_node)
+        workflow.add_node("responder", responder_agent)
+        workflow.add_node("end_node", responder_agent)
         workflow.add_node("tools", ToolNode(TOOLS))
 
         workflow.add_edge(START, "orchestrator")
         workflow.add_conditional_edges("orchestrator", route_agent)
 
         for node in ["clarify", "academic_coach", "teacher", "motivator", "university"]:
-            workflow.add_edge(node, "end_node")
-            workflow.add_conditional_edges(
-                node,
-                tools_condition,
-                path_map={"tools": "tools", "__end__": "end_node"}
-            )
+            #workflow.add_edge(node, "end_node")
+            workflow.add_conditional_edges(node, tools_condition, path_map={"tools": "tools", "__end__": "responder"})
 
-        workflow.add_conditional_edges("tools", route_back_to_caller)
+        workflow.add_edge("tools", "responder")
+        workflow.add_edge("responder", END)
 
         cls._app = workflow.compile(checkpointer=saver)
 
@@ -85,28 +88,50 @@ class CiroTutor:
                     "last_check_in_time": datetime.datetime.now().isoformat(),
                 },
                 "messages": [],
+                "routing_history": [],
+                "current_depth": 0,
+                "max_routing_depth": 10,
             }
 
         # 2. Save (or update) the initial state
-        await self._app.aupdate_state(config, current_state)
+        try:
+            await self._app.aupdate_state(config, current_state)
+        except Exception as e:
+            print(f"Error updating state: {e}")
 
         # 3. Process new message
         inputs = {"new_message": HumanMessage(content=user_input)}
-        final_state = None
-        try:
-            async for event in self._app.astream_events(inputs, config=config, version="v1", stream_mode="values"):
-                if event.get("event") == "on_chain_end":
-                    final_state = event["data"]["output"]
-        except Exception as e:
-            return f"An error occurred: {str(e)}"
 
-        # 4. Extract and return the response
-        # Safely extract the last message from the message list
-        messages = final_state.get("messages", [])
-        if messages and hasattr(messages[-1], "content"):
-            return messages[-1].content
-        else:
+        try:
+            # Use invoke instead of streaming for simpler handling
+            final_state = await self._app.ainvoke(inputs, config=config)
+
+            # Extract response from final state and return the response
+            if final_state and "messages" in final_state:
+                messages = final_state["messages"]
+                if messages and hasattr(messages[-1], "content"):
+                    return messages[-1].content
+
             return "No response generated."
+
+        except Exception as e:
+            print(f"Error during graph execution: {e}")
+            return f"An error occurred: {str(e)}"
+#        final_state = None
+#        try:
+#            async for event in self._app.astream_events(inputs, config=config, version="v1", stream_mode="values"):
+#                if event.get("event") == "on_chain_end":
+#                    final_state = event["data"]["output"]
+#        except Exception as e:
+#            return f"An error occurred: {str(e)}"
+#
+#        # 4. Extract and return the response
+#        # Safely extract the last message from the message list
+#        messages = final_state.get("messages", [])
+#        if messages and hasattr(messages[-1], "content"):
+#            return messages[-1].content
+#        else:
+#            return "No response generated."
 
     async def run_session(self):
         """Runs a local, console-based test loop for this tutor instance."""
