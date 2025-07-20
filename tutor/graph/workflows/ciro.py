@@ -3,6 +3,8 @@ from langchain_core.messages import HumanMessage
 from langgraph.constants import START, END
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+
+from tutor.common.summarizer import ConversationSummarizer
 from tutor.graph.config import STATE_DB, LLM, TOOLS
 from tutor.graph.agents.responder import responder_agent
 from tutor.graph.agents.academic_coach import academic_coach_agent
@@ -20,6 +22,8 @@ class CiroTutor:
     _app = None
 
     def __init__(self, thread_id: str):
+        summarizer_config = {"max_turns": 20} #<TODO: Maybe we can pass the config as a parameter>
+        self.summarizer = ConversationSummarizer(**summarizer_config)
         self.thread_id = thread_id
 
     @classmethod
@@ -33,10 +37,7 @@ class CiroTutor:
             if not next_agent or next_agent not in ["academic_coach", "teacher", "motivator", "university", "clarify",
                                                     "END"]:
                 print(f"Invalid or missing next_agent: {next_agent}. Defaulting to END.")
-                return "end_node"
-
-            if next_agent == "END":
-                return "end_node"
+                return "END"
 
             return next_agent
 
@@ -54,7 +55,6 @@ class CiroTutor:
         workflow.add_node("motivator", motivator_agent)
         workflow.add_node("university", university_agent)
         workflow.add_node("responder", responder_agent)
-        workflow.add_node("end_node", responder_agent)
         workflow.add_node("tools", ToolNode(TOOLS))
 
         workflow.add_edge(START, "orchestrator")
@@ -92,14 +92,33 @@ class CiroTutor:
                 "current_depth": 0,
                 "max_routing_depth": 10,
             }
+        # 2. Check if conversation needs summarization before processing new message
+        if await self.summarizer.should_summarize(current_state):
+            print(f"Conversation history length: {len(current_state.get('messages', []))}. Starting summarization...")
+            try:
+                # Create summary using the LLM
+                summary = await self.summarizer.create_summary(current_state, LLM)
 
-        # 2. Save (or update) the initial state
+                # Compress conversation with summary
+                current_state = self.summarizer.compress_conversation(current_state, summary)
+
+                # Update state with compressed conversation
+                await self._app.aupdate_state(config, current_state)
+
+                print(
+                    f"Conversation summarized successfully. New message count: {len(current_state.get('messages', []))}")
+
+            except Exception as e:
+                print(f"Error during conversation summarization: {e}")
+                # Continue with original state if summarization fails
+
+        # 3. Save (or update) the initial state
         try:
             await self._app.aupdate_state(config, current_state)
         except Exception as e:
             print(f"Error updating state: {e}")
 
-        # 3. Process new message
+        # 4. Process new message
         inputs = {"new_message": HumanMessage(content=user_input)}
 
         try:
@@ -117,21 +136,6 @@ class CiroTutor:
         except Exception as e:
             print(f"Error during graph execution: {e}")
             return f"An error occurred: {str(e)}"
-#        final_state = None
-#        try:
-#            async for event in self._app.astream_events(inputs, config=config, version="v1", stream_mode="values"):
-#                if event.get("event") == "on_chain_end":
-#                    final_state = event["data"]["output"]
-#        except Exception as e:
-#            return f"An error occurred: {str(e)}"
-#
-#        # 4. Extract and return the response
-#        # Safely extract the last message from the message list
-#        messages = final_state.get("messages", [])
-#        if messages and hasattr(messages[-1], "content"):
-#            return messages[-1].content
-#        else:
-#            return "No response generated."
 
     async def run_session(self):
         """Runs a local, console-based test loop for this tutor instance."""
