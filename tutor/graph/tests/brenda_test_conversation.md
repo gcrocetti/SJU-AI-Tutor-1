@@ -30,7 +30,7 @@ I'm really struggling with my study habits. In high school, I barely got by and 
 
 ### 3. **Subject-Specific Help** (Tests: Orchestrator → Teacher)
 ```
-I have a biology assignment due next week where I need to explain cellular respiration, but I'm completely lost. The textbook is confusing and I don't understand the difference between aerobic and anaerobic respiration. Can you break this down for me?
+I have a to submit a pre-assessment next week that requires me to spend 10 minutes writing about a painting. Can you help me out with that?
 ```
 *Expected: Should route to teacher for concept explanation and homework help*
 
@@ -54,7 +54,7 @@ I can't declare a major yet because of my high school grades, but I'm interested
 
 ### 6. **Ambiguous Question** (Tests: Orchestrator → Clarify)
 ```
-I need help with the thing we talked about before, you know, for the class.
+I need help with the thing we talked about before, you know, for the assessment.
 ```
 *Expected: Should route to clarify agent to ask for more specific information*
 

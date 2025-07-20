@@ -121,3 +121,4 @@ def format_lambda_response(status_code: int = 200, body: Dict[str, Any] = None) 
     }
     
     return response
+
