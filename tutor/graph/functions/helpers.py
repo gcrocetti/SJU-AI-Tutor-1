@@ -18,9 +18,13 @@ class GraphState(TypedDict):
     retrieved_content: Optional[List[Dict]]
     current_topic_in_focus: Optional[str]
     knowledge_checker: Optional[Dict] # Element used by the knowledge checker
+    feedback_to_student: Optional[Dict]
     escalation_flag: bool
     tutor_response: str
     next_agent: str  # The name of the next agent to route to
+    routing_history: List[str]  # Track agent calls
+    max_routing_depth: int      # Prevent infinite loops
+    current_depth: int          # Current routing depth
 
 # Pydantic models for structured output from LLM agents
 class OrchestratorDecision(BaseModel):
@@ -40,6 +44,13 @@ class ToolTopic(BaseModel):
 async def end_node(state: GraphState) -> Dict:
     """A simple node to add the final response to the chat history before ending."""
     tutor_response = state['messages'][-1].content
+    # 1. Look for the #<key>:<value># patterns
+    # 2. Extract the <key><value> pairs
+    # 3. Add this value to the state "feedback_to_student"
+    #    state['feedback_to_student'] = ....
+    # 4. Remove these tags from the answer
+    #    4.1 modify the tutor_response (cleaned from all tags)
+    #    4.2 Re-insert the AI message back to the state
     print(" TUTOR: " + tutor_response)
 
     return state
@@ -59,3 +70,4 @@ def execute_tools(state: ToolTopic):
         )
 
     return {'messages': results}
+

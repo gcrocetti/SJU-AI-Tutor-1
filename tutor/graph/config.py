@@ -1,5 +1,5 @@
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from tutor.graph.functions.tools import retrieve_course_material_tool, google_search_tool, google_sju_search_tool
+from tutor.graph.functions.tools import retrieve_course_material_tool, google_search_tool, google_sju_search_tool, google_career_search_tool
 
 HISTORY_LENGTH = 10
 CHAT_MODEL = "gpt-4o"
@@ -9,8 +9,9 @@ TEMPERATURE = 0.5
 MAX_ELAPSED_TIME=120
 
 # Definition of the llm and tools
-TOOLS = [retrieve_course_material_tool, google_search_tool, google_sju_search_tool]
+TOOLS = [retrieve_course_material_tool, google_search_tool, google_sju_search_tool, google_career_search_tool]
 LLM = ChatOpenAI(model=CHAT_MODEL, temperature=TEMPERATURE).bind_tools(TOOLS)
+LLM_NO_TOOLS = ChatOpenAI(model=CHAT_MODEL, temperature=TEMPERATURE)
 
 # Dictionaries
 EMOTIONAL_KEYWORDS = ["stressed", "anxious", "overwhelmed", "demotivated", "sad", "can't focus", "bad day", "struggling", "unmotivated"]
