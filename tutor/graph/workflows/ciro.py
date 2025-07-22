@@ -1,9 +1,12 @@
 import datetime
 from langchain_core.messages import HumanMessage
-from langgraph.constants import START
+from langgraph.constants import START, END
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+
+from tutor.common.summarizer import ConversationSummarizer
 from tutor.graph.config import STATE_DB, LLM, TOOLS
+from tutor.graph.agents.responder import responder_agent
 from tutor.graph.agents.academic_coach import academic_coach_agent
 from tutor.graph.agents.clarify import clarify_agent
 from tutor.graph.functions.helpers import GraphState, end_node
@@ -19,6 +22,8 @@ class CiroTutor:
     _app = None
 
     def __init__(self, thread_id: str):
+        summarizer_config = {"max_turns": 20} #<TODO: Maybe we can pass the config as a parameter>
+        self.summarizer = ConversationSummarizer(**summarizer_config)
         self.thread_id = thread_id
 
     @classmethod
@@ -29,14 +34,15 @@ class CiroTutor:
 
         async def route_agent(state: GraphState) -> str:
             next_agent = state.get("next_agent")
-            if not next_agent:
-                raise ValueError("Missing 'next_agent' in state.")
-            if next_agent == "END":
-                return "end_node"
+            if not next_agent or next_agent not in ["academic_coach", "teacher", "motivator", "university", "clarify",
+                                                    "END"]:
+                print(f"Invalid or missing next_agent: {next_agent}. Defaulting to END.")
+                return "END"
+
             return next_agent
 
         async def route_back_to_caller(state: GraphState) -> str:
-            return state["next_agent"]
+            return "end_node"
 
         conn = await aiosqlite.connect(STATE_DB)
         saver = AsyncSqliteSaver(conn)
@@ -48,21 +54,18 @@ class CiroTutor:
         workflow.add_node("teacher", teacher_agent)
         workflow.add_node("motivator", motivator_agent)
         workflow.add_node("university", university_agent)
-        workflow.add_node("end_node", end_node)
+        workflow.add_node("responder", responder_agent)
         workflow.add_node("tools", ToolNode(TOOLS))
 
         workflow.add_edge(START, "orchestrator")
         workflow.add_conditional_edges("orchestrator", route_agent)
 
         for node in ["clarify", "academic_coach", "teacher", "motivator", "university"]:
-            workflow.add_edge(node, "end_node")
-            workflow.add_conditional_edges(
-                node,
-                tools_condition,
-                path_map={"tools": "tools", "__end__": "end_node"}
-            )
+            #workflow.add_edge(node, "end_node")
+            workflow.add_conditional_edges(node, tools_condition, path_map={"tools": "tools", "__end__": "responder"})
 
-        workflow.add_conditional_edges("tools", route_back_to_caller)
+        workflow.add_edge("tools", "responder")
+        workflow.add_edge("responder", END)
 
         cls._app = workflow.compile(checkpointer=saver)
 
@@ -85,28 +88,54 @@ class CiroTutor:
                     "last_check_in_time": datetime.datetime.now().isoformat(),
                 },
                 "messages": [],
+                "routing_history": [],
+                "current_depth": 0,
+                "max_routing_depth": 10,
             }
+        # 2. Check if conversation needs summarization before processing new message
+        if await self.summarizer.should_summarize(current_state):
+            print(f"Conversation history length: {len(current_state.get('messages', []))}. Starting summarization...")
+            try:
+                # Create summary using the LLM
+                summary = await self.summarizer.create_summary(current_state, LLM)
 
-        # 2. Save (or update) the initial state
-        await self._app.aupdate_state(config, current_state)
+                # Compress conversation with summary
+                current_state = self.summarizer.compress_conversation(current_state, summary)
 
-        # 3. Process new message
-        inputs = {"new_message": HumanMessage(content=user_input)}
-        final_state = None
+                # Update state with compressed conversation
+                await self._app.aupdate_state(config, current_state)
+
+                print(
+                    f"Conversation summarized successfully. New message count: {len(current_state.get('messages', []))}")
+
+            except Exception as e:
+                print(f"Error during conversation summarization: {e}")
+                # Continue with original state if summarization fails
+
+        # 3. Save (or update) the initial state
         try:
-            async for event in self._app.astream_events(inputs, config=config, version="v1", stream_mode="values"):
-                if event.get("event") == "on_chain_end":
-                    final_state = event["data"]["output"]
+            await self._app.aupdate_state(config, current_state)
         except Exception as e:
-            return f"An error occurred: {str(e)}"
+            print(f"Error updating state: {e}")
 
-        # 4. Extract and return the response
-        # Safely extract the last message from the message list
-        messages = final_state.get("messages", [])
-        if messages and hasattr(messages[-1], "content"):
-            return messages[-1].content
-        else:
+        # 4. Process new message
+        inputs = {"new_message": HumanMessage(content=user_input)}
+
+        try:
+            # Use invoke instead of streaming for simpler handling
+            final_state = await self._app.ainvoke(inputs, config=config)
+
+            # Extract response from final state and return the response
+            if final_state and "messages" in final_state:
+                messages = final_state["messages"]
+                if messages and hasattr(messages[-1], "content"):
+                    return messages[-1].content
+
             return "No response generated."
+
+        except Exception as e:
+            print(f"Error during graph execution: {e}")
+            return f"An error occurred: {str(e)}"
 
     async def run_session(self):
         """Runs a local, console-based test loop for this tutor instance."""
