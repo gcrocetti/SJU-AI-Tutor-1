@@ -163,4 +163,3 @@ if __name__ == "__main__":
     except ValueError as e:
         print(f"Configuration Error: {e}")
     except Exception as e:
-        print(f"A critical error occurred during execution: {e}")
