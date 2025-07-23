@@ -1,10 +1,14 @@
 import datetime
+import logging
 from typing import Dict
 from langchain_core.prompts import ChatPromptTemplate
 from tutor.graph.functions.helpers import GraphState
 from tutor.graph.config import DISTRESS_KEYWORDS
 from tutor.graph.config import LLM
+from tutor.graph.functions.tools import store_emotional_evaluation
 
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 async def motivator_agent(state: GraphState) -> Dict:
@@ -46,6 +50,27 @@ async def motivator_agent(state: GraphState) -> Dict:
     except IndexError:
         pass
     state["student_profile"]["last_check_in_time"] = datetime.datetime.now()
+
+    # Store the emotional evaluation in DynamoDB
+    try:
+        # Get user_id with fallback to session_id or generate a default
+        user_id = state["student_profile"].get("user_id") or state.get("session_id") or "unknown_user"
+        
+        # Convert emotional_state list to dictionary format
+        evaluation_data = {
+            "emotional_states": state["student_profile"]["emotional_state"],
+        }
+        
+        storage_result = store_emotional_evaluation.invoke({
+            "user_id": user_id, 
+            "evaluation": evaluation_data
+        })
+        if not storage_result.get("success"):
+            logger.warning(f"Failed to store emotional evaluation: {storage_result.get('message')}")
+        else:
+            logger.info(f"Emotional evaluation stored successfully: {storage_result.get('data')}")
+    except Exception as e:
+        logger.error(f"Error storing emotional evaluation: {e}")
 
     return {
         "messages": decision,

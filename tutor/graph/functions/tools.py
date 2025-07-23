@@ -1,8 +1,27 @@
+from datetime import datetime
+from typing import Dict, Any
+import boto3
+import os
 from langchain_core.tools import tool, Tool
 from langchain_google_community import GoogleSearchAPIWrapper
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 from tutor.config import PINECONE_API_KEY, PINECONE_INDEX_NAME, EMBEDDING_MODEL_NAME
+
+# Setup DynamoDB client with proper credential handling
+try:
+    # Try to use AWS credentials from environment or IAM role
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
+    # Test the connection
+    dynamodb.meta.client.list_tables()
+except Exception as e:
+    print(f"Warning: DynamoDB connection failed - {e}")
+    print("DynamoDB operations will be skipped. Set up AWS credentials to enable storage.")
+    dynamodb = None
+
+# Define table name based on environment
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'dev')
+EVALUATION_TABLE = f'emotional-evaluations-{ENVIRONMENT}'
 
 # Tool Definitions
 # I will implement these tools as I go through the tutor implementation
@@ -55,3 +74,45 @@ def retrieve_course_material_tool(query: str) -> str:
     except Exception as e:
         print(f"Error during Pinecone Course Info retrieval: {e}")
         return "An error occurred while retrieving course information. Please try again later or rephrase your query."
+
+@tool
+def store_emotional_evaluation(user_id: str, evaluation: Dict[str, Any]) -> str:
+    """
+    Stores the emotional evaluation in DynamoDB.
+    """
+    try:
+        # Check if DynamoDB is available
+        if dynamodb is None:
+            return {
+                'success': False,
+                'message': 'DynamoDB not available - AWS credentials not configured'
+            }
+        
+        table = dynamodb.Table(EVALUATION_TABLE)
+
+        # Get current timestamp
+        timestamp = datetime.utcnow().isoformat()
+
+        table.put_item(
+            Item={
+                'user_id': user_id,
+                'evaluation': evaluation,
+                'timestamp': timestamp
+            }
+        )
+
+        return {
+            'success': True,
+            'message': 'Emotional evaluation stored successfully',
+            'data': {
+                'user_id': user_id,
+                'timestamp': timestamp,
+                'evaluation': evaluation
+            }
+        }
+    except Exception as e:
+        print(f"Error storing emotional evaluation: {e}")
+        return {
+            'success': False,
+            'message': f'Error storing emotional evaluation: {str(e)}'
+        }
