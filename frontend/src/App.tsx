@@ -5,6 +5,7 @@ import DiagnosticViewPage from './components/DiagnosticViewPage/DiagnosticViewPa
 import ChapterList from './components/ChapterList';
 import ChapterQuiz from './components/ChapterQuiz';
 import AuthPage from './components/AuthPage';
+import SurveyPage from './components/SurveyPage';
 import authService from './services/authService';
 import './App.css';
 
@@ -33,12 +34,22 @@ import './App.css';
  */
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [needsSurvey, setNeedsSurvey] = useState<boolean>(false);
 
-  // Check authentication status on app load
+  // Check authentication status and survey completion on app load
   useEffect(() => {
     const checkAuth = () => {
       const isLoggedIn = authService.isAuthenticated();
       setIsAuthenticated(isLoggedIn);
+      
+      // Check if user needs to complete the survey
+      if (isLoggedIn) {
+        const userProfile = authService.getUserProfile();
+        const hasSurveyData = userProfile?.surveyResponses;
+        setNeedsSurvey(!hasSurveyData);
+      } else {
+        setNeedsSurvey(false);
+      }
     };
     
     checkAuth();
@@ -53,11 +64,20 @@ function App() {
   
   const handleAuthSuccess = () => {
     setIsAuthenticated(true);
+    // Check if the newly authenticated user needs to complete survey
+    const userProfile = authService.getUserProfile();
+    const hasSurveyData = userProfile?.surveyResponses;
+    setNeedsSurvey(!hasSurveyData);
+  };
+  
+  const handleSurveyComplete = () => {
+    setNeedsSurvey(false);
   };
   
   const handleLogout = () => {
     authService.signout();
     setIsAuthenticated(false);
+    setNeedsSurvey(false);
   };
 
   return (
@@ -82,32 +102,54 @@ function App() {
             {/* Auth routes - accessible when not authenticated */}
             <Route
               path="/login"
-              element={isAuthenticated ? <Navigate to="/" /> : <AuthPage onAuthSuccess={handleAuthSuccess} />}
+              element={isAuthenticated ? (needsSurvey ? <Navigate to="/survey" /> : <Navigate to="/" />) : <AuthPage onAuthSuccess={handleAuthSuccess} />}
             />
             
-            {/* Protected routes - redirect to login if not authenticated */}
+            {/* Survey route - only accessible to authenticated users who haven't completed the survey */}
+            <Route
+              path="/survey"
+              element={isAuthenticated ? (needsSurvey ? <SurveyPage onComplete={handleSurveyComplete} /> : <Navigate to="/" />) : <Navigate to="/login" />}
+            />
+            
+            {/* Protected routes - redirect to survey if needed, otherwise to login if not authenticated */}
             <Route
               path="/"
-              element={isAuthenticated ? <ChatViewPage /> : <Navigate to="/login" />}
+              element={
+                isAuthenticated 
+                  ? (needsSurvey ? <Navigate to="/survey" /> : <ChatViewPage />) 
+                  : <Navigate to="/login" />
+              }
             />
             
             <Route
               path="/diagnostics"
-              element={isAuthenticated ? <DiagnosticViewPage /> : <Navigate to="/login" />}
+              element={
+                isAuthenticated 
+                  ? (needsSurvey ? <Navigate to="/survey" /> : <DiagnosticViewPage />) 
+                  : <Navigate to="/login" />
+              }
             />
             
             <Route
               path="/diagnostics/chapters"
-              element={isAuthenticated ? <ChapterList /> : <Navigate to="/login" />}
+              element={
+                isAuthenticated 
+                  ? (needsSurvey ? <Navigate to="/survey" /> : <ChapterList />) 
+                  : <Navigate to="/login" />
+              }
             />
             
             <Route
               path="/diagnostics/quiz/:chapterId"
-              element={isAuthenticated ? <ChapterQuiz /> : <Navigate to="/login" />}
+              element={
+                isAuthenticated 
+                  ? (needsSurvey ? <Navigate to="/survey" /> : <ChapterQuiz />) 
+                  : <Navigate to="/login" />
+              }
             />
             
             {/* Default redirect */}
-            <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
+            <Route path="*" element={<Navigate to={isAuthenticated ? (needsSurvey ? "/survey" : "/") : "/login"} />} />
           </Routes>
         </div>
       </div>
