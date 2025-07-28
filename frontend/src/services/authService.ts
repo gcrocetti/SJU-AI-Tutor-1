@@ -242,13 +242,8 @@ export class AuthService {
         let data;
         try {
           data = await response.json();
-          console.log('Signin response:', data);
-          console.log('Response data keys:', Object.keys(data));
-          console.log('Full response structure:', JSON.stringify(data, null, 2));
         } catch (e) {
           console.error('Error parsing response:', e);
-          const rawText = await response.text();
-          console.log('Raw response:', rawText);
           throw new Error('Invalid response from server - not JSON');
         }
         
@@ -281,45 +276,20 @@ export class AuthService {
           }
         }
         
-        // Check if the response contains the expected data structure
-        console.log('Processing signin response...');
-        
-        // The current AWS API only returns {"message": "Sign in successful"}
-        // This means the signin API backend needs to be updated to return proper user data
-        // For now, we'll create a user profile from the signin credentials
-        if (data.message === "Sign in successful") {
-          console.log('Signin successful but no user data returned from API');
-          
-          // Create a temporary token for this session
-          const sessionToken = 'session-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-          localStorage.setItem('authToken', sessionToken);
-          
-          // Create user profile from the signin credentials
-          // Since the API doesn't return user data, we'll use what we have from the signin form
-          const userProfile = {
-            sub: credentials.sub, // Use the username/sub from signin form
-            schoolEmail: credentials.schoolEmail, // Use email from signin form
-            firstName: 'User', // Placeholder - API should return this
-            lastName: 'Name', // Placeholder - API should return this
-            createdAt: new Date().toISOString()
-          };
-          
-          console.log('Created user profile from signin credentials:', userProfile);
-          this.saveUserProfile(userProfile);
-          
-          return {
-            success: true,
-            data: {
-              success: true,
-              token: sessionToken,
-              user: userProfile
-            }
-          };
-        } else {
-          console.error('Unexpected signin response format');
-          console.log('Response data:', data);
-          throw new Error('Authentication failed - unexpected response format');
+        // Store the authentication token if it's included in the response
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
         }
+        
+        // Store the user profile if it's included in the response
+        if (data.user) {
+          this.saveUserProfile(data.user);
+        }
+        
+        return {
+          success: true,
+          data: data as AuthResponse
+        };
       } catch (fetchError) {
         console.error('API Fetch Error:', fetchError);
         console.warn('Falling back to mock auth due to API connectivity issue');
@@ -371,6 +341,7 @@ export class AuthService {
     try {
       // Clear local storage
       localStorage.removeItem('authToken');
+      localStorage.removeItem('userProfile');
       
       return true;
     } catch (error) {
@@ -429,7 +400,7 @@ export class AuthService {
   }
 
   /**
-   * Save survey responses to the user profile in local storage
+   * Save survey responses to localStorage
    * This extends the existing user profile with survey data
    * 
    * @param surveyData - The survey responses to save
@@ -437,34 +408,34 @@ export class AuthService {
    */
   async saveSurveyResponses(surveyData: any): Promise<boolean> {
     try {
-      // Check if user is authenticated first
-      if (!this.isAuthenticated()) {
-        throw new Error('User not authenticated');
-      }
-
       // Get current user profile from localStorage
-      const currentProfile = this.getUserProfile();
+      let currentProfile = this.getUserProfile();
       
-      // User profile must exist for survey to be saved
+      // If no profile exists, create a basic one for the survey
       if (!currentProfile) {
-        throw new Error('No user profile found - please log in again');
+        const userId = this.getUserId();
+        currentProfile = {
+          sub: userId || 'anonymous',
+          schoolEmail: 'user@example.com',
+          firstName: 'User',
+          lastName: 'Name',
+          createdAt: new Date().toISOString()
+        };
       }
 
-      // Extend the profile with survey responses for localStorage tracking
+      // Extend the profile with survey responses
       const updatedProfile = {
         ...currentProfile,
         surveyResponses: surveyData,
         surveyCompletedAt: new Date().toISOString()
       };
 
-      // Save the updated profile to localStorage for UI state management
+      // Save the updated profile to localStorage
       this.saveUserProfile(updatedProfile);
-
-      console.log('Survey responses saved to localStorage for UI state tracking');
 
       return true;
     } catch (error) {
-      console.error('Error saving survey responses to localStorage:', error);
+      console.error('Error saving survey responses:', error);
       return false;
     }
   }

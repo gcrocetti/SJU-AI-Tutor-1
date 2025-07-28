@@ -83,8 +83,8 @@ const SurveyPage = ({ onComplete }: SurveyPageProps) => {
   };
 
   /**
-   * Submits the survey responses to the backend API
-   * The responses are stored in JSON format in the AWS DynamoDB Users table
+   * Submits the survey responses locally
+   * The responses are stored in JSON format in localStorage
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,45 +92,20 @@ const SurveyPage = ({ onComplete }: SurveyPageProps) => {
     setLoading(true);
 
     try {
-      // Get the current user's ID from the auth service
-      const userId = authService.getUserId();
-      if (!userId) {
-        throw new Error('User not authenticated');
-      }
-
       // Prepare the survey data in JSON format as requested
       const surveyData = {
-        userId,
-        surveyResponses: {
-          responses: formData,
-          submittedAt: new Date().toISOString()
-        }
-      };
-
-      // Send the survey data to the backend API endpoint
-      // Use the local development server endpoint
-      const response = await fetch('http://localhost:5001/api/survey', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authService.getAuthToken()}`
-        },
-        body: JSON.stringify(surveyData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit survey');
-      }
-
-      const result = await response.json();
-      console.log('Survey submitted successfully to DynamoDB:', result);
-
-      // Also save to localStorage for immediate UI state updates
-      await authService.saveSurveyResponses({
         responses: formData,
         submittedAt: new Date().toISOString()
-      });
+      };
+
+      // Save the survey responses using authService
+      const success = await authService.saveSurveyResponses(surveyData);
+
+      if (!success) {
+        throw new Error('Failed to save survey responses');
+      }
+
+      console.log('Survey submitted successfully:', surveyData);
 
       // Call the completion callback or navigate to the main app
       if (onComplete) {
