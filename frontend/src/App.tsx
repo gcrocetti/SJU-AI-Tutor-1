@@ -62,12 +62,18 @@ function App() {
     };
   }, []);
   
-  const handleAuthSuccess = () => {
+  const handleAuthSuccess = (isSignup: boolean = false) => {
     setIsAuthenticated(true);
-    // Check if the newly authenticated user needs to complete survey
-    const userProfile = authService.getUserProfile();
-    const hasSurveyData = userProfile?.surveyResponses;
-    setNeedsSurvey(!hasSurveyData);
+    
+    if (isSignup) {
+      // Always show survey for new signups
+      setNeedsSurvey(true);
+    } else {
+      // For login, only show survey if they haven't completed it
+      const userProfile = authService.getUserProfile();
+      const hasSurveyData = userProfile?.surveyResponses;
+      setNeedsSurvey(!hasSurveyData);
+    }
   };
   
   const handleSurveyComplete = () => {

@@ -49,6 +49,10 @@ export interface UserProfile {
   createdAt?: string;
   /** When the user was last updated */
   updatedAt?: string;
+  /** Survey responses (if completed) */
+  surveyResponses?: any;
+  /** When the survey was completed */
+  surveyCompletedAt?: string;
 }
 
 /**

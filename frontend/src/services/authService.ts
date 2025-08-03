@@ -242,8 +242,10 @@ export class AuthService {
         let data;
         try {
           data = await response.json();
+          console.log('Signin response:', data);
         } catch (e) {
           console.error('Error parsing response:', e);
+          console.log('Raw response:', await response.text());
           throw new Error('Invalid response from server - not JSON');
         }
         
@@ -341,7 +343,6 @@ export class AuthService {
     try {
       // Clear local storage
       localStorage.removeItem('authToken');
-      localStorage.removeItem('userProfile');
       
       return true;
     } catch (error) {
@@ -400,6 +401,23 @@ export class AuthService {
   }
 
   /**
+   * Get the current user profile
+   * 
+   * @returns The user profile, or null if not available
+   */
+  getUserProfile(): UserProfile | null {
+    const profileJson = localStorage.getItem('userProfile');
+    if (!profileJson) return null;
+    
+    try {
+      return JSON.parse(profileJson) as UserProfile;
+    } catch (error) {
+      console.error('Error parsing user profile:', error);
+      return null;
+    }
+  }
+
+  /**
    * Save survey responses to localStorage
    * This extends the existing user profile with survey data
    * 
@@ -437,23 +455,6 @@ export class AuthService {
     } catch (error) {
       console.error('Error saving survey responses:', error);
       return false;
-    }
-  }
-
-  /**
-   * Get the current user profile including survey responses
-   * 
-   * @returns The complete user profile with survey data, or null if not available
-   */
-  getUserProfile(): (UserProfile & { surveyResponses?: any; surveyCompletedAt?: string }) | null {
-    try {
-      const profileStr = localStorage.getItem('userProfile');
-      if (!profileStr) return null;
-      
-      return JSON.parse(profileStr);
-    } catch (error) {
-      console.error('Error retrieving user profile:', error);
-      return null;
     }
   }
 }

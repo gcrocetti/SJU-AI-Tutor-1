@@ -5,7 +5,7 @@ import useDocumentTitle from '../../hooks/useDocumentTitle';
 import './AuthPage.css';
 
 interface AuthPageProps {
-  onAuthSuccess?: () => void;
+  onAuthSuccess?: (isSignup: boolean) => void;
 }
 
 const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
@@ -18,9 +18,15 @@ const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
     setIsLogin(!isLogin);
   };
   
-  const handleSuccess = () => {
+  const handleLoginSuccess = () => {
     if (onAuthSuccess) {
-      onAuthSuccess();
+      onAuthSuccess(false); // false = login, not signup
+    }
+  };
+
+  const handleSignupSuccess = () => {
+    if (onAuthSuccess) {
+      onAuthSuccess(true); // true = signup
     }
   };
   
@@ -40,12 +46,12 @@ const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
         <div className="auth-content">
           {isLogin ? (
             <LoginForm 
-              onSuccess={handleSuccess} 
+              onSuccess={handleLoginSuccess} 
               onSignupClick={handleSwitchMode} 
             />
           ) : (
             <SignupForm 
-              onSuccess={handleSuccess} 
+              onSuccess={handleSignupSuccess} 
               onLoginClick={handleSwitchMode} 
             />
           )}

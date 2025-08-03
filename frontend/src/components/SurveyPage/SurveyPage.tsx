@@ -24,8 +24,7 @@ interface SurveyPageProps {
  * Collects information about their academic goals, support needs,
  * participation interests, work schedule, and potential challenges.
  * 
- * The survey responses are stored in JSON format in AWS DynamoDB
- * associated with the user's account.
+ * The survey responses are stored in JSON format in localStorage.
  */
 const SurveyPage = ({ onComplete }: SurveyPageProps) => {
   const navigate = useNavigate();
