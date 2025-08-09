@@ -24,6 +24,11 @@ if ! command_exists npm; then
   exit 1
 fi
 
+# Load environment variables from .env file
+if [ -f ".env" ]; then
+  export $(grep -v '^#' .env | xargs)
+fi
+
 # Check for .env file
 if [ ! -f ".env" ]; then
   echo -e "${YELLOW}No .env file found. Creating from template...${NC}"

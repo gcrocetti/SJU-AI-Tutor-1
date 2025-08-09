@@ -1,4 +1,4 @@
-// import apiClient from './apiClient';
+import apiClient from './apiClient';
 import { ApiResponse } from '../types/api';
 import { SignupFormData, SigninFormData, AuthResponse, UserProfile } from '../types/auth';
 
@@ -12,7 +12,7 @@ export class AuthService {
   // For production
   private readonly SIGNUP_ENDPOINT_PROD = 'https://rvqkmofwv7.execute-api.us-east-2.amazonaws.com/dev/signup';
   private readonly SIGNIN_ENDPOINT_PROD = 'https://rvqkmofwv7.execute-api.us-east-2.amazonaws.com/dev/signin';
-  private readonly SURVEY_ENDPOINT_PROD = 'https://c7hnlqiqh9.execute-api.us-east-2.amazonaws.com/survey';
+  private readonly SURVEY_ENDPOINT_PROD = 'https://bln266odp7.execute-api.us-east-2.amazonaws.com/dev/survey';
   
   // For development options
   private readonly USE_CORS_PROXY = false; // No CORS proxy
