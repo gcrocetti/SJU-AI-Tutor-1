@@ -109,18 +109,8 @@ class CiroTutor:
             # Using invoke instead of streaming for simpler handling
             final_state = await self._app.ainvoke(inputs, config=config)
 
-            # 3. Save (or update) the new state
-#            try:
-#                await self._app.aupdate_state(config, current_state)
-#            except Exception as e:
-#                print(f"Error updating state: {e}")
-
-            # Extract response from final state and return the response
+            # 3. Extract response from final state and return the response
             if final_state and "messages" in final_state:
-                # Save current state checkpointer
-#                checkpoint = {"ts": datetime.now(timezone.utc).isoformat(), "id": self.thread_id}
-#                await self._app.checkpointer.aput(config, checkpoint, metadata={}, new_versions={key: "1" for key in final_state})
-
                 messages = final_state["messages"]
                 if messages and hasattr(messages[-1], "content"):
                     return messages[-1].content
