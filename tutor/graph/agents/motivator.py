@@ -1,15 +1,20 @@
+import re
 import datetime
 from typing import Dict
 from langchain_core.prompts import ChatPromptTemplate
 from tutor.graph.functions.helpers import GraphState
-from tutor.graph.config import DISTRESS_KEYWORDS
+from tutor.graph.config import DISTRESS_KEYWORDS, EventType
 from tutor.graph.config import LLM
-
+from tutor.common.userManager import Event,UserManager
+from tutor.common.utils import get_tag_value_by_key
 
 
 async def motivator_agent(state: GraphState) -> Dict:
     # Critical safety check - this runs BEFORE the LLM for immediate action
     user_query = state['new_message'].content
+    user_email = state['student_profile']['email']
+
+    # <TO DO: we can use the emotional state instead of hardcoding a distress signal>
     if any(keyword in user_query.lower() for keyword in DISTRESS_KEYWORDS):
         print("\n!!! SEVERE DISTRESS DETECTED - ESCALATING !!!")
         response = ("It sounds like you are in significant distress. Your safety is the most important thing. "
@@ -31,7 +36,7 @@ async def motivator_agent(state: GraphState) -> Dict:
     system_prompt += f"""\n\n
     Provide a supportive, empathetic response. Assess the student's emotional state based on their message.
     
-    At the end of the output, add a string with the following format #emotional_state:<value># with value is your opinion on the emotional state of the student according to the chat history.
+    At the end of the output, add a string with the following format #emotional_state: <value># with value is your opinion on the emotional state of the student according to the chat history.
     """
 
     # Preparing the prompt for the Motivator Agent
@@ -41,11 +46,22 @@ async def motivator_agent(state: GraphState) -> Dict:
         ("user", f"{user_query}"),
     ])
     decision = await LLM.ainvoke(prompt.format(user_query=user_query))
+
     try:
-        state["student_profile"]["emotional_state"].append(decision.content.split('#')[1].split(':')[1])
-    except IndexError:
+        # Extract the value of #emotional_state:<value>#, update the state and store it to the user history
+        emotional_state = get_tag_value_by_key(decision.content, "emotional_state")
+        if emotional_state != "":
+            motivator_event = Event(user_email,EventType.MOTIVATOR.value,emotional_state)
+            state["student_profile"]["emotional_state"].append(emotional_state)
+            if not UserManager.store_event(motivator_event):
+                print("Event not stored")
+    except (AttributeError, IndexError):
+        # Handle cases where content or the key does not exist
         pass
+
+    # <TO DO: UPDATING CHECK IN TIME TO AVOID TRIGGERING>
     state["student_profile"]["last_check_in_time"] = datetime.datetime.now()
+
 
     return {
         "messages": decision,

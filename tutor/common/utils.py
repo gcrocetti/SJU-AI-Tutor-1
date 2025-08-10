@@ -6,6 +6,7 @@ focusing on setup, configuration, and error handling.
 """
 
 import os
+import re
 import json
 import logging
 from typing import Any, Dict, Optional
@@ -121,4 +122,31 @@ def format_lambda_response(status_code: int = 200, body: Dict[str, Any] = None) 
     }
     
     return response
+
+def remove_tags(input_string: str) -> str:
+    # Use a regex pattern to find and remove tags of the format #<key>:<value>#
+    return re.sub(r"#\w+:\w+#", "", input_string)
+
+
+def get_tag_value_by_key(input_string: str, key: str) -> str:
+    """
+    Retrieve the value of the tag for the specified key from the string.
+
+    :param input_string: The input string containing tags in the format #<key>:<value>#
+    :param key: The key of the tag to search for
+    :return: The value of the tag if found, otherwise an empty string
+    """
+    # Regular expression to match tags with the given key
+    pattern = rf"#{key}: (.*?)#"
+
+    # Search for the pattern in the string
+    match = re.search(pattern, input_string)
+
+    # If a match is found, return the value part of the tag
+    if match:
+        return match.group(1)  # Group 1 contains the captured value
+
+    # Return an empty string if no matching tag is found
+    return ""
+
 

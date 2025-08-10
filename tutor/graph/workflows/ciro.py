@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timezone
 from langchain_core.messages import HumanMessage
 from langgraph.constants import START, END
 from langgraph.graph import StateGraph
@@ -8,6 +8,7 @@ from tutor.common.summarizer import ConversationSummarizer
 from tutor.graph.config import STATE_DB, LLM, TOOLS
 from tutor.graph.agents.responder import responder_agent
 from tutor.graph.agents.academic_coach import academic_coach_agent
+from tutor.graph.agents.summarization_agent import summarize_agent
 from tutor.graph.agents.clarify import clarify_agent
 from tutor.graph.functions.helpers import GraphState, end_node
 from tutor.graph.agents.orchestrator import orchestrator_agent
@@ -21,10 +22,11 @@ import aiosqlite
 class CiroTutor:
     _app = None
 
-    def __init__(self, thread_id: str):
+    def __init__(self, email: str):
         summarizer_config = {"max_turns": 20} #<TODO: Maybe we can pass the config as a parameter>
         self.summarizer = ConversationSummarizer(**summarizer_config)
-        self.thread_id = thread_id
+        self.thread_id = email
+        self.email = email
 
     @classmethod
     async def init_graph(cls):
@@ -48,6 +50,7 @@ class CiroTutor:
         saver = AsyncSqliteSaver(conn)
 
         workflow = StateGraph(GraphState)
+        workflow.add_node("summarizer", summarize_agent)
         workflow.add_node("orchestrator", orchestrator_agent)
         workflow.add_node("clarify", clarify_agent)
         workflow.add_node("academic_coach", academic_coach_agent)
@@ -57,7 +60,9 @@ class CiroTutor:
         workflow.add_node("responder", responder_agent)
         workflow.add_node("tools", ToolNode(TOOLS))
 
-        workflow.add_edge(START, "orchestrator")
+        workflow.add_edge(START, "summarizer")
+        workflow.add_edge("summarizer", "orchestrator")
+
         workflow.add_conditional_edges("orchestrator", route_agent)
 
         for node in ["clarify", "academic_coach", "teacher", "motivator", "university"]:
@@ -74,59 +79,48 @@ class CiroTutor:
         config = {"configurable": {"thread_id": self.thread_id}}
 
         # 1. Load existing state (or initialize new one)
-        current_state = await self._app.aget_state(config)
-        current_state = current_state[0]  # aget_state returns a list
+        current_state = await self._app.checkpointer.aget(config)
 
         if not current_state:
             print(f"Initializing new state for {self.thread_id}")
             current_state = {
                 "student_profile": {
-                    "learning_style": "visual",
+                    "email": self.email,
                     "academic_goals": ["Pass LST 1000X EDGE and declare my major."],
-                    "academic_progress": {},
-                    "emotional_state": ["neutral"],
-                    "last_check_in_time": datetime.datetime.now().isoformat(),
+                    "academic_progress": [],
+                    "knowledge_checker": [],
+                    "emotional_state": [],
+                    "last_check_in_time": datetime.now().isoformat(),
                 },
                 "messages": [],
                 "routing_history": [],
                 "current_depth": 0,
                 "max_routing_depth": 10,
             }
-        # 2. Check if conversation needs summarization before processing new message
-        if await self.summarizer.should_summarize(current_state):
-            print(f"Conversation history length: {len(current_state.get('messages', []))}. Starting summarization...")
-            try:
-                # Create summary using the LLM
-                summary = await self.summarizer.create_summary(current_state, LLM)
 
-                # Compress conversation with summary
-                current_state = self.summarizer.compress_conversation(current_state, summary)
+        # Save initialized or restored state
+        #s = await self._app.aupdate_state(config, current_state)
 
-                # Update state with compressed conversation
-                await self._app.aupdate_state(config, current_state)
+        # 2. Process new message and invoke the workflow
+        inputs = {**current_state, "new_message": HumanMessage(content=user_input)}
 
-                print(
-                    f"Conversation summarized successfully. New message count: {len(current_state.get('messages', []))}")
-
-            except Exception as e:
-                print(f"Error during conversation summarization: {e}")
-                # Continue with original state if summarization fails
-
-        # 3. Save (or update) the initial state
-        try:
-            await self._app.aupdate_state(config, current_state)
-        except Exception as e:
-            print(f"Error updating state: {e}")
-
-        # 4. Process new message
-        inputs = {"new_message": HumanMessage(content=user_input)}
 
         try:
-            # Use invoke instead of streaming for simpler handling
+            # Using invoke instead of streaming for simpler handling
             final_state = await self._app.ainvoke(inputs, config=config)
+
+            # 3. Save (or update) the new state
+#            try:
+#                await self._app.aupdate_state(config, current_state)
+#            except Exception as e:
+#                print(f"Error updating state: {e}")
 
             # Extract response from final state and return the response
             if final_state and "messages" in final_state:
+                # Save current state checkpointer
+#                checkpoint = {"ts": datetime.now(timezone.utc).isoformat(), "id": self.thread_id}
+#                await self._app.checkpointer.aput(config, checkpoint, metadata={}, new_versions={key: "1" for key in final_state})
+
                 messages = final_state["messages"]
                 if messages and hasattr(messages[-1], "content"):
                     return messages[-1].content

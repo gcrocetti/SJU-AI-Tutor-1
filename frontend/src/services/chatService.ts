@@ -27,10 +27,14 @@ export class ChatService {
    * @returns Promise resolving to the AI's response message
    */
   async sendMessage(text: string, sessionId?: string): Promise<Message> {
+
+    const userEmail = sessionStorage.getItem('userEmail');
+
     // Create the request object
     const request = {
       message: text,
-      session_id: sessionId
+      session_id: sessionId,
+      email: userEmail
     };
     
     try {

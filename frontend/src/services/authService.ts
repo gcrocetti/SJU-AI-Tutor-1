@@ -1,4 +1,3 @@
-import apiClient from './apiClient';
 import { ApiResponse } from '../types/api';
 import { SignupFormData, SigninFormData, AuthResponse, UserProfile } from '../types/auth';
 

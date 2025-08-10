@@ -62,7 +62,7 @@ async def chat():
     }
     """
     data = await request.get_json()
-    tutor = CiroTutor(thread_id=data.get("session_id", str(uuid.uuid4())))
+    tutor = CiroTutor(data.get("email")) #The email will be our main ID
     response = await tutor.process_message(data["message"])
     return jsonify({"response": response})
 

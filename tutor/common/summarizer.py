@@ -4,6 +4,7 @@ from langchain_core.messages import SystemMessage
 
 from tutor.graph.functions.helpers import GraphState
 from typing import List, Dict, Any
+from langgraph.graph.message import RemoveMessage
 
 class ConversationSummarizer:
     """Handles conversation summarization to manage memory"""
@@ -81,14 +82,15 @@ class ConversationSummarizer:
 
     def compress_conversation(self, state: GraphState, summary: str) -> GraphState:
         """Replace old messages with summary and keep recent messages"""
-        # Keep the last few messages for immediate context
 
-        recent_messages = state["messages"][-5:] if len(state["messages"]) > 5 else state["messages"]
+        # Keep the last few messages for immediate context and delete all other messages
+        updated_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-5]]
 
         # Create summary message
         summary_message = SystemMessage(content=f"Previous conversation summary: {summary}")
 
         # Update state with compressed history
-        state["messages"] = [summary_message] + recent_messages
+        messages = [summary_message] + updated_messages
+        state["messages"] = messages
 
         return state

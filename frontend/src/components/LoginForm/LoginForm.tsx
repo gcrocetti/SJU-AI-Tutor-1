@@ -36,6 +36,10 @@ const LoginForm = ({ onSuccess, onSignupClick }: LoginFormProps) => {
       
       if (response.success && response.data) {
         console.log('Login successful:', response.data);
+
+        // Store the user email in the session
+        sessionStorage.setItem('userEmail', formData.schoolEmail);
+
         if (onSuccess) onSuccess();
       } else {
         setError(response.error?.message || 'Login failed');

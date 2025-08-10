@@ -33,12 +33,22 @@ import './App.css';
  */
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
 
   // Check authentication status on app load
   useEffect(() => {
     const checkAuth = () => {
       const isLoggedIn = authService.isAuthenticated();
+      const email = sessionStorage.getItem('userEmail'); // Retrieve the email from session
+
       setIsAuthenticated(isLoggedIn);
+      // Set the user email if available
+      if (isLoggedIn && email) {
+        setUserEmail(email);
+      } else {
+        setUserEmail(null);
+      }
     };
     
     checkAuth();
@@ -53,11 +63,17 @@ function App() {
   
   const handleAuthSuccess = () => {
     setIsAuthenticated(true);
+
+    // Retrieve and set email after login
+    const email = sessionStorage.getItem('userEmail');
+    setUserEmail(email || null);
   };
   
   const handleLogout = () => {
-    authService.signout();
+    authService.signout(); // Call the auth service to handle the logout on the backend
+    sessionStorage.removeItem('userEmail'); // Remove email from session storage
     setIsAuthenticated(false);
+    setUserEmail(null); // Clear the email from state
   };
 
   return (
@@ -69,6 +85,7 @@ function App() {
             <div className="header-left"></div>
             <div className="header-center">CIRO AI Tutor</div>
             <div className="header-right">
+              {userEmail && <span className="user-email">Logged in as: {userEmail}</span>}
               <button className="logout-button" onClick={handleLogout}>
                 Log Out
               </button>

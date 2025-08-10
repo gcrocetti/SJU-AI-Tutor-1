@@ -95,3 +95,4 @@ frontend/Tutor/
 
 # Claude AI assistant files
 CLAUDE.md
+/tutor/common/._utils.py

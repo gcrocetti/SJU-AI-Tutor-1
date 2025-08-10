@@ -1,9 +1,7 @@
-from typing import TypedDict, List, Dict, Optional, Annotated, Callable, Literal
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
+from typing import TypedDict, List, Dict, Optional, Annotated, Literal
+from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel, Field
-from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph.message import add_messages
-from langchain_openai import ChatOpenAI
 
 # Shared State Definition (LangGraph StateGraph State)
 class GraphState(TypedDict):

@@ -1,9 +1,12 @@
+from enum import Enum
+
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from tutor.graph.functions.tools import retrieve_course_material_tool, google_search_tool, google_sju_search_tool, google_career_search_tool
 
 HISTORY_LENGTH = 10
 CHAT_MODEL = "gpt-4o"
 TEMPERATURE = 0.5
+MAX_TURNS = 200 # Length of the message list in Ciro's memory before summarizing
 
 # Maximum time (in minutes) of inactivity allowed before triggering the motivator
 MAX_ELAPSED_TIME=120
@@ -18,6 +21,18 @@ EMOTIONAL_KEYWORDS = ["stressed", "anxious", "overwhelmed", "demotivated", "sad"
 EMOTIONAL_STATE = ["stressed", "overwhelmed"]
 DISTRESS_KEYWORDS = ["suicidal", "ending it all", "kill myself", "hopeless", "want to die"]
 
+# AWS Parameters
+AWS_REGION = "us-east-2"
 # Parameters for agents
 MOTIVATOR_CHECK_MINUTES = 5
 STATE_DB = "C:/tmp/ciro_state.db"
+
+class EventType(Enum):
+    LOGIN = "login_event"
+    LOGOUT = "logout_event"
+    SIGNUP = "signup_event"
+    DATA_UPDATE = "data_update_event"
+    NOTIFICATION = "notification_event"
+    MOTIVATOR = "motivator_event"
+    ACADEMIC = "academic_event"
+    KNOWLEDGE = "knowledge_check_event"
