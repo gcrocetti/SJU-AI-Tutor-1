@@ -1,0 +1,71 @@
+from typing import TypedDict, List, Dict, Optional, Annotated, Literal
+from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
+from pydantic import BaseModel, Field
+from langgraph.graph.message import add_messages
+
+# Shared State Definition (LangGraph StateGraph State)
+class GraphState(TypedDict):
+    """
+    Represents the shared state for the LangGraph workflow.
+    It is append-only, ensuring memory of past interactions.
+    """
+    new_message: HumanMessage
+    messages: Annotated[List[BaseMessage], add_messages] # Automatically appends messages
+    student_profile: Dict
+    agent_task_description: Optional[str]
+    retrieved_content: Optional[List[Dict]]
+    current_topic_in_focus: Optional[str]
+    knowledge_checker: Optional[Dict] # Element used by the knowledge checker
+    feedback_to_student: Optional[Dict]
+    escalation_flag: bool
+    tutor_response: str
+    next_agent: str  # The name of the next agent to route to
+    routing_history: List[str]  # Track agent calls
+    max_routing_depth: int      # Prevent infinite loops
+    current_depth: int          # Current routing depth
+
+# Pydantic models for structured output from LLM agents
+class OrchestratorDecision(BaseModel):
+    """The Orchestrator's routing decision and plan for the next agent."""
+    next_agent: Literal["academic_coach", "teacher", "motivator", "university", "clarify"] = Field(
+        description="The name of the agent to route to next."
+    )
+    task_description: str = Field(
+        description="A clear, concise, and reformulated task for the selected agent based on the user's query."
+    )
+    notes: str = Field(description="A brief explanation for the routing decision.")
+
+
+class ToolTopic(BaseModel):
+    tool_calls: List = Field(description="The list of tool calls identified by the agent.")
+
+async def end_node(state: GraphState) -> Dict:
+    """A simple node to add the final response to the chat history before ending."""
+    tutor_response = state['messages'][-1].content
+    # 1. Look for the #<key>:<value># patterns
+    # 2. Extract the <key><value> pairs
+    # 3. Add this value to the state "feedback_to_student"
+    #    state['feedback_to_student'] = ....
+    # 4. Remove these tags from the answer
+    #    4.1 modify the tutor_response (cleaned from all tags)
+    #    4.2 Re-insert the AI message back to the state
+    print(" TUTOR: " + tutor_response)
+
+    return state
+
+# Execute tool functions for all the notes that are tool-enabled
+def execute_tools(state: ToolTopic):
+    tool_calls = state.tool_calls
+    results = []
+    for t in tool_calls:
+        result = tool_calls[t['name']].invoke(t['args'])
+        results.append(
+            ToolMessage(
+                tool_call_id=t['id'],
+                name=t['name'],
+                content=str(result)
+            )
+        )
+
+    return {'messages': results}
+
